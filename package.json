@@ -1,0 +1,31 @@
+{
+  "name": "newconcret-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Toda la inteligencia de NewConcret, en un solo lugar.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "dev": "npm run dev --workspace @nci/web",
+    "db:local": "npm run local --workspace @nci/db",
+    "db:check": "npm run check --workspace @nci/db",
+    "db:generate": "npm run generate --workspace @nci/db",
+    "db:migrate": "npm run migrate --workspace @nci/db",
+    "db:seed": "npm run seed --workspace @nci/db",
+    "user:password": "npm run set-password --workspace @nci/core --",
+    "demo:comercial": "npm run demo --workspace @nci/sales"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

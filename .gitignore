@@ -1,0 +1,36 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+
+# Secretos. .env.example sí se versiona: es la plantilla, sin valores reales.
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.p12
+token.txt
+
+*.log
+npm-debug.log*
+
+.DS_Store
+Thumbs.db
+
+*.tsbuildinfo
+.turbo/
+
+# Datos de la base local embebida
+.data/
+
+# Documentos de producto de NewConcret.
+#
+# Definen la visión, el modelo de dominio y la arquitectura funcional del
+# negocio. El repositorio es público: el código se publica, la estrategia no.
+# Se conservan fuera del control de versiones, junto al proyecto.
+*.docx
+*.pptx
+docs/product/

@@ -1,0 +1,21 @@
+{
+  "name": "@nci/design",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "El Product Design Language en código: tokens y reglas de comportamiento.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./tokens.css": "./tokens.css"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  }
+}

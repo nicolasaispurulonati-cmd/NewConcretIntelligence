@@ -1,0 +1,40 @@
+{
+  "name": "@nci/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Esquema del grafo de conocimiento sobre PostgreSQL.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "default": "./dist/schema/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "local": "node --import tsx src/local-server.ts",
+    "check": "node --import tsx src/check.ts",
+    "generate": "drizzle-kit generate",
+    "migrate": "node --import tsx src/migrate.ts",
+    "seed": "node --import tsx src/seed.ts",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
+  },
+  "dependencies": {
+    "@nci/domain": "*",
+    "drizzle-orm": "^0.44.5",
+    "postgres": "^3.4.5"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.4",
+    "@electric-sql/pglite-pgvector": "^0.0.5",
+    "@electric-sql/pglite-socket": "^0.2.7",
+    "drizzle-kit": "^0.31.5"
+  }
+}

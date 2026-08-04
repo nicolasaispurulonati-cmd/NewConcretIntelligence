@@ -1,0 +1,27 @@
+{
+  "name": "@nci/sales",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Dominio Sales: el presupuesto como entidad, con estado, versiones e historia.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "demo": "node --import tsx src/scripts/demo.ts"
+  },
+  "dependencies": {
+    "@nci/core": "*",
+    "@nci/db": "*",
+    "@nci/domain": "*",
+    "drizzle-orm": "^0.44.5"
+  }
+}

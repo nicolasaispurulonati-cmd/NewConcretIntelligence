@@ -1,0 +1,41 @@
+# PostgreSQL para desarrollo local.
+#
+# La imagen es la oficial de pgvector: trae la extensión ya compilada, que es
+# justamente la parte difícil de resolver en Windows. `pg_trgm` y `unaccent`
+# vienen en el contrib estándar de PostgreSQL, así que las tres extensiones que
+# usa el esquema están disponibles sin instalar nada más.
+#
+#   docker compose up -d      levantar
+#   docker compose down       detener (los datos se conservan)
+#   docker compose down -v    detener y borrar los datos
+#
+# Estas credenciales son deliberadamente triviales y sólo valen para esta base
+# local. La de producción nunca se escribe en un archivo versionado.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: nci-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nci
+      POSTGRES_PASSWORD: desarrollo_local
+      POSTGRES_DB: nci
+      # Español para ordenar y comparar texto como corresponde: sin esto,
+      # "ñ" y los acentos se ordenan mal en los listados.
+      POSTGRES_INITDB_ARGS: '--locale=es_AR.UTF-8 --encoding=UTF8'
+    ports:
+      - '5432:5432'
+    volumes:
+      - nci-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # Las migraciones fallan si arrancan antes de que el servidor acepte
+      # conexiones. Con esto, `docker compose up --wait` espera lo necesario.
+      test: ['CMD-SHELL', 'pg_isready -U nci -d nci']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+volumes:
+  nci-postgres-data:
