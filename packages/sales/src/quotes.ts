@@ -9,7 +9,7 @@
  * criterios distintos sobre el mismo documento.
  */
 
-import { and, asc, desc, eq, like, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 
 import {
   ValidationError,
@@ -506,6 +506,67 @@ export async function loadQuote(scope: Scope, quoteId: string): Promise<Quote> {
       lineTotal: line.lineTotal,
     })),
   };
+}
+
+/** Los estados en los que un presupuesto todavía espera algo de alguien. */
+const OPEN_STATUSES = ['borrador', 'enviado'] as const;
+
+export interface OpenQuoteTotals {
+  readonly currency: string;
+  /** Suma de los totales de esa moneda. Nunca se combina con otra. */
+  readonly total: Cents;
+  readonly drafts: number;
+  readonly awaiting: number;
+}
+
+/**
+ * Cuánto hay comprometido en presupuestos abiertos, agrupado por moneda.
+ *
+ * Se agrega en la base y sobre el conjunto completo. Derivarlo de una lista
+ * paginada produce un número que parece un total y no lo es — y el error es
+ * silencioso: no hace falta ninguna condición rara, alcanza con tener más
+ * presupuestos abiertos que filas muestre la lista.
+ *
+ * Se agrupa por moneda y no se suman dos. No hay tipo de cambio en el sistema
+ * y convertir sin uno sería inventar una cifra. Ver D-003.
+ *
+ * `ownerId` acota la vista, no el permiso: quien puede leer presupuestos puede
+ * leerlos todos, y este parámetro sólo elige con cuáles se abre la pantalla.
+ * Ver D-004.
+ */
+export async function openQuoteTotals(
+  scope: Scope,
+  view: { readonly ownerId?: string } = {},
+): Promise<OpenQuoteTotals[]> {
+  scope.actor.assertCanActOn('quote', 'read');
+
+  const rows = await scope.db
+    .select({
+      currency: quotes.currency,
+      total: sql<number>`coalesce(sum(${quotes.total}), 0)`,
+      drafts: sql<number>`count(*) filter (where ${entities.status} = 'borrador')`,
+      awaiting: sql<number>`count(*) filter (where ${entities.status} = 'enviado')`,
+    })
+    .from(quotes)
+    .innerJoin(entities, eq(entities.id, quotes.entityId))
+    .where(
+      and(
+        inArray(entities.status, [...OPEN_STATUSES]),
+        isNull(entities.archivedAt),
+        ...(view.ownerId ? [eq(quotes.ownerId, view.ownerId)] : []),
+      ),
+    )
+    .groupBy(quotes.currency)
+    .orderBy(quotes.currency);
+
+  // Las sumas y los conteos vuelven como texto: son `bigint` del lado del
+  // servidor. Es el mismo camino que ya usa la búsqueda con su puntaje.
+  return rows.map((row) => ({
+    currency: row.currency,
+    total: Number(row.total),
+    drafts: Number(row.drafts),
+    awaiting: Number(row.awaiting),
+  }));
 }
 
 /** El cliente al que se le emitió, según el grafo. */

@@ -19,8 +19,10 @@ import {
   addQuoteItem,
   createNewVersion,
   createQuote,
+  openQuoteTotals,
   rejectQuote,
   sendQuote,
+  type OpenQuoteTotals,
 } from './quotes.js';
 
 let db: Database | undefined;
@@ -286,6 +288,102 @@ describe('Presupuesto: ciclo de vida', () => {
       cerrado = caught as ValidationError;
     }
     assert.match(String(cerrado?.reason), /estado final/);
+  });
+});
+
+/**
+ * El indicador de comprometido.
+ *
+ * Se calcula contra la base y no sobre la lista que muestra el Workspace. Las
+ * dos pruebas de acá cubren los dos modos en que el cálculo anterior mentía:
+ * truncaba el conjunto y mezclaba monedas.
+ *
+ * Se comparan diferencias contra una medición previa, no valores absolutos: la
+ * base de desarrollo tiene presupuestos de otras corridas y de otras pruebas de
+ * este mismo archivo, y un valor absoluto haría fallar la prueba por algo que
+ * no tiene nada que ver con lo que se está verificando.
+ */
+describe('Comprometido en presupuestos abiertos', () => {
+  /** El widget del Workspace lista seis filas. Nueve no entran. */
+  const ABIERTOS = 9;
+
+  function porMoneda(filas: readonly OpenQuoteTotals[]): Record<string, OpenQuoteTotals> {
+    return Object.fromEntries(filas.map((fila) => [fila.currency, fila]));
+  }
+
+  async function clienteDePrueba(sufijo: string): Promise<string> {
+    const cliente = await crearTemporal(scope, {
+      type: 'customer',
+      slug: `cliente-agregado-${sufijo}-${marca}`,
+      displayName: `Cliente agregado ${sufijo} ${marca}`,
+      status: 'activo',
+    });
+    await scope.db.insert(customers).values({ entityId: cliente.id, paymentTermsDays: 30 });
+    return cliente.id;
+  }
+
+  it('cuenta todos los presupuestos abiertos, no sólo los que entran en la lista', async (t) => {
+    if (!disponible) return t.skip('sin base de datos disponible');
+
+    const antes = porMoneda(await openQuoteTotals(scope, { ownerId: scope.actor.id }));
+    const customerId = await clienteDePrueba('conjunto');
+
+    for (let i = 0; i < ABIERTOS; i += 1) {
+      const presupuesto = anotar(await createQuote(scope, { customerId }));
+      await addQuoteItem(scope, presupuesto.entity.id, {
+        description: `Concret D · renglón ${i + 1}`,
+        quantity: 1,
+        unitPrice: 10_000,
+      });
+    }
+
+    const despues = porMoneda(await openQuoteTotals(scope, { ownerId: scope.actor.id }));
+
+    assert.equal(
+      (despues['ARS']?.drafts ?? 0) - (antes['ARS']?.drafts ?? 0),
+      ABIERTOS,
+      'el conteo tiene que incluir los nueve, no los seis que muestra el widget',
+    );
+    assert.equal(
+      (despues['ARS']?.total ?? 0) - (antes['ARS']?.total ?? 0),
+      ABIERTOS * 12_100,
+      'el importe también: 10.000 más 21 % de IVA, nueve veces',
+    );
+  });
+
+  it('no suma monedas distintas', async (t) => {
+    if (!disponible) return t.skip('sin base de datos disponible');
+
+    const antes = porMoneda(await openQuoteTotals(scope, { ownerId: scope.actor.id }));
+    const customerId = await clienteDePrueba('monedas');
+
+    const enPesos = anotar(await createQuote(scope, { customerId }));
+    await addQuoteItem(scope, enPesos.entity.id, {
+      description: 'Concret D',
+      quantity: 1,
+      unitPrice: 100_000,
+    });
+
+    const enDolares = anotar(await createQuote(scope, { customerId, currency: 'USD' }));
+    await addQuoteItem(scope, enDolares.entity.id, {
+      description: 'Repuesto importado',
+      quantity: 1,
+      unitPrice: 50_000,
+    });
+
+    const despues = porMoneda(await openQuoteTotals(scope, { ownerId: scope.actor.id }));
+
+    assert.ok(despues['USD'], 'la moneda tiene que aparecer como grupo propio');
+    assert.equal(
+      (despues['ARS']?.total ?? 0) - (antes['ARS']?.total ?? 0),
+      121_000,
+      'los pesos no pueden haber absorbido los dólares',
+    );
+    assert.equal(
+      (despues['USD']?.total ?? 0) - (antes['USD']?.total ?? 0),
+      60_500,
+      'ni los dólares a los pesos',
+    );
   });
 });
 

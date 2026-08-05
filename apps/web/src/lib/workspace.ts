@@ -15,7 +15,7 @@ import type { Scope } from '@nci/core';
 import { activity, entities, notifications, quotes, workspaceWidgets } from '@nci/db';
 import { ROLES, type RoleId } from '@nci/domain';
 import { formatRelativeTime, metric, type Metric } from '@nci/design';
-import { formatMoney } from '@nci/sales';
+import { formatMoney, openQuoteTotals, type OpenQuoteTotals } from '@nci/sales';
 
 export interface WidgetRenderable {
   readonly id: string;
@@ -28,6 +28,14 @@ export interface WidgetRenderable {
 
 type WidgetLoader = (scope: Scope) => Promise<WidgetRenderable | null>;
 
+/**
+ * Cuántas filas muestra un widget.
+ *
+ * Es un límite de presentación y nada más. Ningún indicador puede calcularse
+ * sobre estas filas: el agregado se pide aparte, sobre el conjunto completo.
+ */
+const LISTA_MAXIMA = 6;
+
 const REGISTRY: Record<string, WidgetLoader> = {
   /**
    * Los presupuestos de esta persona, con lo que hay que hacer con cada uno.
@@ -39,45 +47,35 @@ const REGISTRY: Record<string, WidgetLoader> = {
   'sales.my_quotes': async (scope) => {
     if (!scope.actor.canActOn('quote', 'read')) return null;
 
-    const rows = await scope.db
-      .select({
-        number: quotes.number,
-        version: quotes.version,
-        total: quotes.total,
-        currency: quotes.currency,
-        sentAt: quotes.sentAt,
-        status: entities.status,
-        customer: entities.subtitle,
-        slug: entities.slug,
-      })
-      .from(quotes)
-      .innerJoin(entities, eq(entities.id, quotes.entityId))
-      .where(and(eq(quotes.ownerId, scope.actor.id), isNull(entities.archivedAt)))
-      .orderBy(desc(entities.updatedAt))
-      .limit(6);
-
-    const borradores = rows.filter((row) => row.status === 'borrador');
-    const esperando = rows.filter((row) => row.status === 'enviado');
-    const abiertos = [...borradores, ...esperando];
-    const comprometido = abiertos.reduce((sum, row) => sum + row.total, 0);
+    // Dos consultas con propósitos distintos. La lista muestra lo último que
+    // se tocó y está truncada a propósito; el indicador tiene que hablar del
+    // conjunto entero, así que se agrega en la base y no sobre estas filas.
+    const [rows, abiertos] = await Promise.all([
+      scope.db
+        .select({
+          number: quotes.number,
+          version: quotes.version,
+          total: quotes.total,
+          currency: quotes.currency,
+          sentAt: quotes.sentAt,
+          status: entities.status,
+          customer: entities.subtitle,
+          slug: entities.slug,
+        })
+        .from(quotes)
+        .innerJoin(entities, eq(entities.id, quotes.entityId))
+        .where(and(eq(quotes.ownerId, scope.actor.id), isNull(entities.archivedAt)))
+        .orderBy(desc(entities.updatedAt))
+        .limit(LISTA_MAXIMA),
+      openQuoteTotals(scope, { ownerId: scope.actor.id }),
+    ]);
 
     return {
       id: 'sales.my_quotes',
       title: 'Tus presupuestos',
       // El importe solo no dice nada: lo que importa es cuánto de eso todavía
       // depende de una acción tuya y cuánto de una respuesta del cliente.
-      ...(abiertos.length > 0
-        ? {
-            metric: metric({
-              label: 'Comprometido en presupuestos abiertos',
-              value: formatMoney(comprometido, abiertos[0]?.currency ?? 'ARS'),
-              context: [
-                { label: 'Sin enviar', value: String(borradores.length) },
-                { label: 'Esperando respuesta', value: String(esperando.length) },
-              ],
-            }),
-          }
-        : {}),
+      ...(abiertos.length > 0 ? { metric: comprometido(abiertos) } : {}),
       lines: rows.map((row) => ({
         primary: `${row.number}${row.version > 1 ? ` v${row.version}` : ''} · ${row.customer ?? 'sin cliente'}`,
         secondary: describeQuote(row.status, row.sentAt, row.total, row.currency),
@@ -114,7 +112,7 @@ const REGISTRY: Record<string, WidgetLoader> = {
         ),
       )
       .orderBy(quotes.sentAt)
-      .limit(6);
+      .limit(LISTA_MAXIMA);
 
     return {
       id: 'crm.follow_ups',
@@ -139,7 +137,7 @@ const REGISTRY: Record<string, WidgetLoader> = {
       })
       .from(activity)
       .orderBy(desc(activity.occurredAt))
-      .limit(6);
+      .limit(LISTA_MAXIMA);
 
     return {
       id: 'activity.feed',
@@ -164,7 +162,7 @@ const REGISTRY: Record<string, WidgetLoader> = {
       .from(activity)
       .where(eq(activity.actorId, scope.actor.id))
       .orderBy(desc(activity.occurredAt))
-      .limit(6);
+      .limit(LISTA_MAXIMA);
 
     return {
       id: 'activity.mine',
@@ -188,7 +186,7 @@ const REGISTRY: Record<string, WidgetLoader> = {
       .from(notifications)
       .where(and(eq(notifications.userId, scope.actor.id), isNull(notifications.readAt)))
       .orderBy(desc(notifications.createdAt))
-      .limit(6);
+      .limit(LISTA_MAXIMA);
 
     return {
       id: 'notifications.important',
@@ -240,6 +238,31 @@ export async function loadWorkspace(scope: Scope): Promise<WorkspaceLayout> {
   }
 
   return { widgets, pending };
+}
+
+/**
+ * El indicador de comprometido, armado desde el agregado por moneda.
+ *
+ * Con más de una moneda los importes se muestran uno al lado del otro y el
+ * rótulo lo aclara. No se suman ni se convierten: sin tipo de cambio, un único
+ * número sería una cifra inventada con apariencia de total. Ver D-003.
+ */
+function comprometido(abiertos: readonly OpenQuoteTotals[]): Metric {
+  const importes = abiertos.map((fila) => formatMoney(fila.total, fila.currency));
+  const borradores = abiertos.reduce((total, fila) => total + fila.drafts, 0);
+  const esperando = abiertos.reduce((total, fila) => total + fila.awaiting, 0);
+
+  return metric({
+    label:
+      abiertos.length > 1
+        ? 'Comprometido en presupuestos abiertos, por moneda'
+        : 'Comprometido en presupuestos abiertos',
+    value: importes.join(' · '),
+    context: [
+      { label: 'Sin enviar', value: String(borradores) },
+      { label: 'Esperando respuesta', value: String(esperando) },
+    ],
+  });
 }
 
 /**
