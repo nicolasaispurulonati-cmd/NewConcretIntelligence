@@ -109,7 +109,7 @@ La modelización de ciclos de consumo queda fuera: para eso hace falta el export
 
 ## D-007 · Procedencia en los nodos, con el vocabulario de las aristas
 
-**Fecha:** 2026-08-05 · **Estado:** vigente
+**Fecha:** 2026-08-05 · **Estado:** vigente, con dos correcciones · el vocabulario, por [D-009](#d-009--un-solo-vocabulario-de-procedencia-con-integration-adentro) · el motivo de serializar las pruebas, por [D-011](#d-011--las-pruebas-de-integración-se-serializan-porque-comparten-una-base)
 
 **Decisión:** `entities` incorpora `source` y `confidence`, con el mismo vocabulario y la misma semántica que ya tenía `entity_relations`. `confidence` pasa de `text` a `numeric(3,2)` en las dos tablas, con rango validado en la base: nulo, o entre 0 y 1.
 
@@ -203,6 +203,31 @@ La alternativa descartada era conservarla para las pruebas que manejaba bien. No
 
 ---
 
+## D-011 · Las pruebas de integración se serializan porque comparten una base
+
+**Fecha:** 2026-08-06 · **Estado:** vigente · Supersede el motivo de la última decisión menor de [D-007](#d-007--procedencia-en-los-nodos-con-el-vocabulario-de-las-aristas), no la decisión.
+
+**Decisión:** las pruebas de integración siguen corriendo de a un archivo por vez, con `--test-concurrency=1`. Lo que cambia es el fundamento, que estaba mal registrado.
+
+**Motivo:** D-007 lo justificó como respuesta a la base embebida, que atendía un cliente por vez. Medido después contra PostgreSQL 17.10, ese motivo no se sostiene:
+
+| Motor | Paralelo | Secuencial |
+|---|---|---|
+| PostgreSQL 17.10 | 125 en verde, 0 salteadas — cinco corridas | idéntico, cinco corridas |
+| PGlite 18.3 | 46/1/3, 47/0/3, 50/0/0 | 50/0/0 — tres corridas |
+
+Contra el motor real el delta es cero. La inestabilidad era de PGlite, que ya se retiró por [D-010](#d-010--se-retira-la-base-embebida-la-integración-corre-contra-postgresql-real). Serializar por ese motivo sería mantener el remedio de una enfermedad que ya no existe.
+
+El fundamento real es otro y no depende del motor: **las pruebas de integración comparten una sola base**. Crean entidades, las borran al terminar, y varias miden diferencias contra un estado previo — `openQuoteTotals` y el conteo de seguimientos se verifican así porque la base de desarrollo tiene datos de otras corridas. Dos archivos en paralelo sobre la misma base se ven las escrituras entre sí, y una prueba que mide un delta contra un fondo que otro archivo está moviendo mide cualquier cosa.
+
+**Consecuencias:** habilita escribir pruebas de integración que miden diferencias sin tener que aislar cada una. Cuesta tiempo de pared, que hoy es despreciable. Deja de hacer falta el día que cada archivo tenga su propia base — una por trabajador, creada y descartada por corrida—, que es la forma de recuperar el paralelismo sin perder la independencia.
+
+**Por qué esta entrada y no una edición:** el registro dice que una entrada no se toca salvo para marcarla como supersedida. Es la primera vez que se usa el mecanismo. Se marca el alcance exacto: D-007 sigue vigente en lo que decidió —las columnas de procedencia y el tipo de `confidence`—, y lo que se corrige es el motivo de una de sus decisiones menores.
+
+**Evidencia:** las mediciones de arriba; `packages/core/package.json` y `packages/sales/package.json`, que declaran el guion; y `docs/00-auditoria-linea-base.md`, que registró el síntoma original.
+
+---
+
 ## Cómo se agrega una entrada
 
-Se numera con el siguiente `D-00N` disponible, se agrega al final, y no se toca ninguna de las anteriores salvo para marcarlas como supersedidas por la nueva.
+Se numera con el siguiente `D-00N` disponible, se agrega al final, y no se toca ninguna de las anteriores salvo para marcarlas como supersedidas por la nueva. Una entrada puede quedar supersedida en parte: cuando pasa, se dice qué parte, para que nadie tenga que deducir si el resto sigue en pie.

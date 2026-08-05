@@ -270,6 +270,8 @@ No dice nada más. Ni el host, ni la versión del servidor, ni el texto del erro
 
 [`docs/08-technical-architecture.md`](docs/08-technical-architecture.md) explica cómo cada decisión técnica responde a un principio de producto. Es el punto de entrada para entender por qué el código está organizado así.
 
-[`docs/09-estado-actual.md`](docs/09-estado-actual.md) describe qué está construido, qué está a medias y qué decisiones quedan abiertas.
+[`docs/09-estado-actual.md`](docs/09-estado-actual.md) es el índice de la documentación y explica qué contiene cada documento. Ninguno describe el estado actual del código: eso lo describe el código, y lo que se documenta son decisiones y hallazgos fechados.
+
+[`docs/10-decisiones.md`](docs/10-decisiones.md) es el registro de decisiones. Ninguna entrada se borra: si una se revierte, otra la supersede.
 
 Los documentos de producto que definen la visión, el modelo de dominio y la arquitectura funcional se mantienen fuera del control de versiones.
