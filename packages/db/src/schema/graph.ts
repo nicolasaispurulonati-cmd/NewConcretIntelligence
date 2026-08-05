@@ -17,6 +17,7 @@ import {
   customType,
   index,
   jsonb,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -77,6 +78,24 @@ export const entities = pgTable(
     /** Quién responde por este nodo. Todo documento debe tener propietario. */
     ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
 
+    // ── Procedencia ───────────────────────────────────────────────────────
+    // Mismo vocabulario que las aristas, a propósito: un nodo y una relación
+    // se afirman de la misma manera, y quien lee el grafo no tiene que
+    // aprender dos idiomas. Ver D-007.
+    /**
+     * Quién afirmó que este nodo existe. 'user' | 'system' | 'ai'.
+     *
+     * Un nodo inferido —una máquina deducida del historial de ventas— tiene
+     * que poder decir que fue inferido. Sin esto, la única forma de anotarlo
+     * sería enterrarlo en `data`, que no está tipado ni validado.
+     */
+    source: text('source').notNull().default('user'),
+    /**
+     * Certeza de la inferencia, de 0 a 1. Nula cuando lo afirmó una persona:
+     * una afirmación humana no lleva probabilidad, lleva responsable.
+     */
+    confidence: numeric('confidence', { precision: 3, scale: 2 }),
+
     // ── Contenido ─────────────────────────────────────────────────────────
     data: jsonb('data').notNull().default({}),
     /** Texto plano derivado del nodo. Alimenta búsqueda y embeddings. */
@@ -111,6 +130,11 @@ export const entities = pgTable(
       'entities_classification_valid',
       sql`${table.classification} in ('public','internal','financial','restricted')`,
     ),
+    check('entities_source_valid', sql`${table.source} in ('user','system','ai')`),
+    check(
+      'entities_confidence_valid',
+      sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`,
+    ),
   ],
 );
 
@@ -141,8 +165,14 @@ export const entityRelations = pgTable(
      * se distingue siempre de una que afirmó una persona.
      */
     source: text('source').notNull().default('user'),
-    /** 0 a 1 cuando la infirió la IA; nulo cuando la afirmó una persona. */
-    confidence: text('confidence'),
+    /**
+     * 0 a 1 cuando la infirió la IA; nulo cuando la afirmó una persona.
+     *
+     * Numérico y con rango validado en la base: como texto admitía "alta",
+     * "0,8" o "-3" sin que nada se quejara, y ordenar por certeza daba un
+     * orden alfabético. Ver D-007.
+     */
+    confidence: numeric('confidence', { precision: 3, scale: 2 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
   },
@@ -152,6 +182,10 @@ export const entityRelations = pgTable(
     index('entity_relations_to_idx').on(table.toId, table.type),
     check('entity_relations_no_self', sql`${table.fromId} <> ${table.toId}`),
     check('entity_relations_source_valid', sql`${table.source} in ('user','system','ai')`),
+    check(
+      'entity_relations_confidence_valid',
+      sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`,
+    ),
   ],
 );
 

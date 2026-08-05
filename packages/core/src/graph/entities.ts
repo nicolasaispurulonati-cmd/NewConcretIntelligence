@@ -25,11 +25,24 @@ export interface EntityNode {
   readonly status: string | null;
   readonly classification: string;
   readonly ownerId: string | null;
+  /** Quién afirmó que este nodo existe. Ver D-007. */
+  readonly source: EntitySource;
+  /** Certeza de la inferencia, de 0 a 1. Nula cuando lo afirmó una persona. */
+  readonly confidence: number | null;
   readonly data: Record<string, unknown>;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly archivedAt: Date | null;
 }
+
+/**
+ * Cómo entró un nodo al grafo.
+ *
+ * El mismo vocabulario que usan las aristas. Un dato inferido y uno afirmado
+ * por una persona no valen lo mismo, y la diferencia tiene que poder leerse
+ * sin abrir el `data`.
+ */
+export type EntitySource = 'user' | 'system' | 'ai';
 
 export interface CreateEntityInput {
   readonly type: EntityTypeId;
@@ -39,6 +52,10 @@ export interface CreateEntityInput {
   readonly subtitle?: string;
   readonly status?: string;
   readonly ownerId?: string;
+  /** Por defecto 'user': si nadie dice lo contrario, lo afirmó una persona. */
+  readonly source?: EntitySource;
+  /** Sólo tiene sentido junto a un `source` que no sea 'user'. De 0 a 1. */
+  readonly confidence?: number;
   readonly data?: Record<string, unknown>;
   /**
    * Texto plano que representa al nodo para la búsqueda y para la IA. Cada
@@ -82,6 +99,8 @@ export async function createEntity(scope: Scope, input: CreateEntityInput): Prom
       status: input.status ?? null,
       classification: definition.classification,
       ownerId: input.ownerId ?? scope.actor.id,
+      source: input.source ?? 'user',
+      confidence: input.confidence !== undefined ? String(input.confidence) : null,
       data: input.data ?? {},
       searchableText: input.searchableText ?? input.displayName,
       createdBy: scope.actor.id,
@@ -273,6 +292,8 @@ function toNode(row: EntityRow): EntityNode {
     status: row.status,
     classification: row.classification,
     ownerId: row.ownerId,
+    source: row.source as EntitySource,
+    confidence: row.confidence === null ? null : Number(row.confidence),
     data: row.data as Record<string, unknown>,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,

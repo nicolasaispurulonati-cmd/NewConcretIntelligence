@@ -4,8 +4,6 @@ Decisiones de arquitectura y de producto de NewConcret Intelligence, en orden cr
 
 **Ninguna entrada se borra ni se edita para cambiar lo que dice.** Si una decisión se revierte, se agrega una entrada nueva que la supersede y la anterior se marca como tal. El valor del registro está en poder leer por qué se decidió algo cuando ya nadie se acuerda, incluso —sobre todo— cuando la decisión resultó equivocada.
 
-> D-007 queda reservado para la representación de `confidence`, que se decide junto con la migración de procedencia del grafo.
-
 ---
 
 ## D-001 · Tango es la fuente de verdad de stock, precios y contabilidad
@@ -106,6 +104,38 @@ La modelización de ciclos de consumo queda fuera: para eso hace falta el export
 **Consecuencias:** por definir en la propuesta. Se registra ahora para que quede constancia de que el problema está identificado y de que su solución todavía no está aprobada.
 
 **Evidencia:** `packages/core/src/authorization/actor.ts:127-137` devuelve listas; los cuatro sitios que las aplican a mano son `packages/core/src/search.ts:111-112`, `packages/core/src/graph/relations.ts:173`, `packages/core/src/graph/universe.ts:177` y `packages/core/src/graph/entities.ts:259`. Diseño en `docs/11-propuesta-acceso-entidades.md`.
+
+---
+
+## D-007 · Procedencia en los nodos, con el vocabulario de las aristas
+
+**Fecha:** 2026-08-05 · **Estado:** vigente
+
+**Decisión:** `entities` incorpora `source` y `confidence`, con el mismo vocabulario y la misma semántica que ya tenía `entity_relations`. `confidence` pasa de `text` a `numeric(3,2)` en las dos tablas, con rango validado en la base: nulo, o entre 0 y 1.
+
+**Motivo:** las aristas sabían decir quién las afirmó y con cuánta certeza; los nodos no. Un nodo inferido —una máquina deducida del historial de ventas de Tango, que es lo que exige D-005— sólo podía declararlo enterrándolo en `data`, que es JSONB sin tipar ni validar. La alternativa descartada era exactamente esa: dejarlo en `data` y que cada dominio invente su clave.
+
+Sobre el tipo de `confidence`, se descartaron dos:
+
+| Alternativa | Por qué no |
+|---|---|
+| Seguir en `text` | Admitía `"alta"`, `"0,8"` o `"-3"` sin quejarse, y ordenar por certeza daba un orden alfabético: `"0.9"` antes que `"0.85"` |
+| Entero de 0 a 100 | Exacto y barato, pero cambia el significado de todo valor ya escrito y del comentario que documenta el campo, a cambio de nada |
+
+`numeric(3,2)` mantiene la semántica documentada de 0 a 1, es exacto —sin la deriva del punto flotante, que el proyecto ya rechazó para el dinero— y no cambia el camino de lectura: `getRelated` ya convertía con `Number()`.
+
+**Consecuencias:** habilita cargar parque instalado inferido del historial sin perder de vista que es inferido. Cuesta una migración que cambia el tipo de una columna existente. Revertirla borra `entities.source` por completo: todo nodo inferido vuelve a ser indistinguible de uno afirmado por una persona, y eso no se recupera.
+
+**Decisiones tomadas al implementarlo, que este registro deja asentadas:**
+
+- **Las columnas se conectaron al código, no sólo al esquema.** `CreateEntityInput` acepta `source` y `confidence`, y `EntityNode` los expone. Una columna que ningún código puede escribir es exactamente el campo decorativo que D-003 existe para no tener.
+- **La reversión vive en un archivo aparte**, `0002_procedencia.down.sql`, que el migrador no ejecuta —el journal no lo lista— y que se aplica a mano. Drizzle no genera migraciones de bajada y no había convención previa; el archivo documenta también qué no se recupera al revertir.
+- **El valor por defecto es `user`.** Lo que existía antes de la migración lo creó una persona.
+- **Las pruebas de `@nci/core` corren de a un archivo por vez.** Al agregar un segundo archivo de integración, los dos empezaron a competir por el único cliente que atiende la base embebida de desarrollo, y uno se salteaba sin avisar: `node --test` corre los archivos en paralelo. Con `--test-concurrency=1` el resultado es el mismo en todas las corridas. Contra un PostgreSQL real la concurrencia no molesta, pero una prueba que a veces no corre no es una prueba.
+
+**Tensión conocida, sin resolver:** `activity.source` admite un cuarto valor, `'integration'`, que ni las aristas ni ahora los nodos aceptan. Un nodo inferido por el puente de Tango tendría que declararse como `'system'` o forzar la ampliación del vocabulario en las tres tablas. Se deja anotado porque el diseño de D-005 va a tener que decidirlo.
+
+**Evidencia:** `packages/db/src/schema/graph.ts` (columnas y restricciones), `packages/db/migrations/0002_procedencia.sql`, `packages/core/src/graph/entities.ts`. Pruebas en `packages/core/src/graph/provenance.integration.test.ts`, que escriben SQL directo para verificar que la base rechaza el dato aunque nadie valide antes.
 
 ---
 
