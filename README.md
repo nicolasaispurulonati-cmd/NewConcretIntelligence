@@ -109,7 +109,18 @@ Las unitarias. No necesitan base de datos, corren en paralelo y tardan segundos.
 npm run test:integracion
 ```
 
-Las que tocan la base, contra PostgreSQL real. Verifica el motor antes de empezar: si no está levantado, si responde PGlite o si la versión no coincide con la de producción, la corrida **falla y explica cómo levantarlo**. No se degrada a otra cosa — la degradación silenciosa es lo que hizo que este proyecto validara durante semanas contra un motor que no era el suyo.
+Las que tocan la base, contra PostgreSQL real. Antes de correr una sola prueba verifica cuatro cosas, y si alguna no coincide **falla diciendo qué esperaba, qué encontró y cómo levantar el entorno correcto**:
+
+| Verifica | Por qué |
+|---|---|
+| Versión mayor de PostgreSQL | Una prueba contra otra versión valida otro sistema. Un PostgreSQL instalado en la máquina hace años puede tomar el puerto antes que el contenedor |
+| pgvector, presencia y versión | El esquema declara una columna `vector(1024)` y un índice HNSW |
+| Que no haya migraciones pendientes | Contra un esquema viejo, las pruebas fallan por columnas que no existen y esconden el defecto real |
+| Que la base esté declarada como de pruebas | Las pruebas crean y borran datos. Contra una base con información real eso es destructivo y no se deshace |
+
+Lo último es un parámetro del servidor, `nci.entorno = pruebas`, que pone [`docker-compose.yml`](docker-compose.yml). Es configuración y no un dato: sobrevive a `db:reset`, la aplicación no puede escribirlo, y un PostgreSQL gestionado no lo trae. Ponerlo en producción exige un acto deliberado, que es exactamente la diferencia que se busca contra el accidente.
+
+Nada de esto se degrada a una alternativa. La degradación silenciosa es lo que hizo que este proyecto validara durante semanas contra un motor que no era el suyo.
 
 ```bash
 npm run typecheck

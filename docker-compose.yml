@@ -1,8 +1,4 @@
-# PostgreSQL para desarrollo local.
-#
-# Es el camino por defecto. La base embebida en WebAssembly sigue disponible
-# con `npm run db:embedded`, pero sólo atiende un cliente por vez: con la
-# aplicación corriendo no se puede migrar. Esta instancia no tiene ese límite.
+# PostgreSQL para desarrollo local y para las pruebas de integración.
 #
 #   npm run db:local     levantar y esperar a que acepte conexiones
 #   npm run db:down      detener (los datos se conservan en el volumen)
@@ -10,8 +6,7 @@
 #   npm run db:logs      ver la salida del servidor
 #
 # Las credenciales son deliberadamente triviales y valen sólo para esta base
-# local. Coinciden a propósito con las de la base embebida, para que cambiar
-# de una a otra no obligue a tocar DATABASE_URL.
+# local.
 
 services:
   postgres:
@@ -21,6 +16,19 @@ services:
     image: pgvector/pgvector:pg17
     container_name: nci-postgres
     restart: unless-stopped
+
+    # El marcador que identifica a esta base como de pruebas.
+    #
+    # Las pruebas de integración borran lo que crean y crean lo que necesitan.
+    # Contra una base con datos reales eso es destructivo, y hoy no puede pasar
+    # sólo porque todavía no hay ninguna desplegada. El arnés exige este
+    # parámetro y se niega a correr sin él.
+    #
+    # Es configuración del servidor y no un dato: sobrevive a `db:reset`, la
+    # aplicación no puede escribirlo, y un PostgreSQL gestionado no lo tiene.
+    # Ponerlo en producción exige un acto deliberado, que es exactamente la
+    # diferencia que se busca contra el accidente.
+    command: postgres -c nci.entorno=pruebas
 
     environment:
       POSTGRES_USER: postgres
