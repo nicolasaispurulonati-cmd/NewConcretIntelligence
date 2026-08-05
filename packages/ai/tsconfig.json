@@ -4,6 +4,9 @@
     "rootDir": "./src",
     "outDir": "./dist"
   },
+  // Sin @nci/db, y no por olvido: el motor de IA sólo llega a los datos por
+  // @nci/core con un Scope. Agregarlo acá sería el primer paso para saltearlo.
+  "references": [{ "path": "../domain" }, { "path": "../core" }],
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"]
 }

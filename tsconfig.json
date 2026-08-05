@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+
+  // Este proyecto no compila nada por sí mismo: existe para que `tsc -b`
+  // conozca todos los paquetes y los construya en el orden que impone el grafo
+  // de dependencias, no en el orden alfabético en que npm los recorre.
+  //
+  // apps/web no está acá a propósito. Su compilación la hace Next, con otro
+  // objetivo de módulos y con JSX.
+  "files": [],
+  "references": [
+    { "path": "./packages/domain" },
+    { "path": "./packages/db" },
+    { "path": "./packages/core" },
+    { "path": "./packages/design" },
+    { "path": "./packages/ai" },
+    { "path": "./packages/sales" }
+  ]
+}

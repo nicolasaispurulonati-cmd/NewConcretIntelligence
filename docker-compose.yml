@@ -1,41 +1,63 @@
 # PostgreSQL para desarrollo local.
 #
-# La imagen es la oficial de pgvector: trae la extensión ya compilada, que es
-# justamente la parte difícil de resolver en Windows. `pg_trgm` y `unaccent`
-# vienen en el contrib estándar de PostgreSQL, así que las tres extensiones que
-# usa el esquema están disponibles sin instalar nada más.
+# Es el camino por defecto. La base embebida en WebAssembly sigue disponible
+# con `npm run db:embedded`, pero sólo atiende un cliente por vez: con la
+# aplicación corriendo no se puede migrar. Esta instancia no tiene ese límite.
 #
-#   docker compose up -d      levantar
-#   docker compose down       detener (los datos se conservan)
-#   docker compose down -v    detener y borrar los datos
+#   npm run db:local     levantar y esperar a que acepte conexiones
+#   npm run db:down      detener (los datos se conservan en el volumen)
+#   npm run db:reset     detener y borrar los datos
+#   npm run db:logs      ver la salida del servidor
 #
-# Estas credenciales son deliberadamente triviales y sólo valen para esta base
-# local. La de producción nunca se escribe en un archivo versionado.
+# Las credenciales son deliberadamente triviales y valen sólo para esta base
+# local. Coinciden a propósito con las de la base embebida, para que cambiar
+# de una a otra no obligue a tocar DATABASE_URL.
 
 services:
   postgres:
+    # La imagen oficial de pgvector trae la extensión ya compilada, que es la
+    # parte difícil de resolver en Windows. `pg_trgm` y `unaccent` vienen en el
+    # contrib estándar, así que las tres que usa el esquema están disponibles.
     image: pgvector/pgvector:pg17
     container_name: nci-postgres
     restart: unless-stopped
+
     environment:
-      POSTGRES_USER: nci
-      POSTGRES_PASSWORD: desarrollo_local
-      POSTGRES_DB: nci
-      # Español para ordenar y comparar texto como corresponde: sin esto,
-      # "ñ" y los acentos se ordenan mal en los listados.
-      POSTGRES_INITDB_ARGS: '--locale=es_AR.UTF-8 --encoding=UTF8'
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+
+      # Sin locale a medida, deliberadamente.
+      #
+      # Pedir `es_AR.UTF-8` haría fallar el primer arranque: ese locale no está
+      # generado en la imagen, e `initdb` aborta. Para ordenar en español no
+      # hace falta configurarlo acá — PostgreSQL registra las colaciones de ICU
+      # al inicializarse, así que se pide donde importa:
+      #
+      #   ORDER BY display_name COLLATE "es-AR-x-icu"
+      POSTGRES_INITDB_ARGS: '--encoding=UTF8'
+
     ports:
+      # Mismo puerto que la base embebida: sólo una de las dos a la vez.
       - '5432:5432'
+
     volumes:
       - nci-postgres-data:/var/lib/postgresql/data
+
     healthcheck:
       # Las migraciones fallan si arrancan antes de que el servidor acepte
-      # conexiones. Con esto, `docker compose up --wait` espera lo necesario.
-      test: ['CMD-SHELL', 'pg_isready -U nci -d nci']
-      interval: 5s
+      # conexiones. Con esto, `docker compose up --wait` espera lo necesario en
+      # lugar de que el script siguiente falle por llegar temprano.
+      #
+      # `pg_isready` sin host consulta por socket local y responde afirmativo
+      # durante la inicialización, cuando todavía no acepta TCP. Con -h se
+      # comprueba el mismo camino que usa la aplicación.
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -U postgres -d postgres']
+      interval: 3s
       timeout: 3s
-      retries: 12
+      retries: 20
       start_period: 10s
 
 volumes:
   nci-postgres-data:
+    name: nci-postgres-data

@@ -1,36 +1,67 @@
+# ─────────────────────────────────────────────────────────────
+# NewConcret Intelligence
+#
+# Los patrones sin barra inicial se aplican a cualquier profundidad, así que
+# cubren también los workspaces de packages/ y apps/.
+# ─────────────────────────────────────────────────────────────
+
+# Dependencias
 node_modules/
+
+# Compilados y cachés de build
 dist/
 build/
-.next/
 out/
+.next/
+.turbo/
 coverage/
+*.tsbuildinfo
 
-# Secretos. .env.example sí se versiona: es la plantilla, sin valores reales.
+# Credenciales del proyecto de Vercel que deja la CLI al vincular el repositorio
+.vercel/
+
+# ─────────────────────────────────────────────────────────────
+# Secretos
+#
+# Se ignora cualquier .env y se rescata sólo la plantilla. El orden importa:
+# la negación tiene que venir después del patrón que la incluye, o no surte
+# efecto.
+# ─────────────────────────────────────────────────────────────
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+
+# Material criptográfico suelto
 *.pem
 *.key
 *.p12
+*.pfx
+
+# Restos de sesión que dejan los scripts de verificación
 token.txt
 
+# Registros y basura del sistema operativo
 *.log
 npm-debug.log*
-
 .DS_Store
 Thumbs.db
 
-*.tsbuildinfo
-.turbo/
-
-# Datos de la base local embebida
+# ─────────────────────────────────────────────────────────────
+# Datos de la base local
+#
+# PGlite guarda acá el cluster de PostgreSQL embebido. Son datos de
+# desarrollo: se recrean con db:migrate y db:seed.
+# ─────────────────────────────────────────────────────────────
 .data/
 
-# Documentos de producto de NewConcret.
+# ─────────────────────────────────────────────────────────────
+# Documentos de producto de NewConcret
 #
 # Definen la visión, el modelo de dominio y la arquitectura funcional del
 # negocio. El repositorio es público: el código se publica, la estrategia no.
-# Se conservan fuera del control de versiones, junto al proyecto.
+# Los archivos siguen en la carpeta del proyecto, fuera del control de
+# versiones.
+# ─────────────────────────────────────────────────────────────
 *.docx
 *.pptx
 docs/product/

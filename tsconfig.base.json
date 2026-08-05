@@ -17,6 +17,11 @@
     "forceConsistentCasingInFileNames": true,
     "declaration": true,
     "declarationMap": true,
-    "sourceMap": true
+    "sourceMap": true,
+    // Cada paquete es un proyecto con sus dependencias declaradas. Así el orden
+    // de compilación deja de ser algo que hay que recordar: `tsc -b` lo deduce
+    // del grafo. En una máquina que ya tiene los `dist` construidos cualquier
+    // orden parece funcionar; en un clon limpio — el de Vercel, el de CI — no.
+    "composite": true
   }
 }

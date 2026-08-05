@@ -136,12 +136,44 @@ async function main(): Promise<void> {
   console.log('Dejá esta terminal abierta. Para detenerlo: Ctrl+C');
   console.log('En otra terminal: npm run db:migrate');
 
+  /**
+   * Volcado periódico a disco.
+   *
+   * Este proceso sólo puede terminarse de forma forzada desde fuera de su
+   * terminal: Windows no ofrece una señal que un proceso de consola pueda
+   * atender. Cuando eso pasa, lo que quedó en memoria se pierde y el
+   * directorio de datos queda a medio escribir.
+   *
+   * Un CHECKPOINT cada pocos segundos no evita el cierre abrupto, pero cambia
+   * su consecuencia: en lugar de tener que recrear la base entera, se pierden
+   * como mucho los últimos segundos. Sobre una base de desarrollo el costo es
+   * despreciable.
+   */
+  let volcando = false;
+  const volcado = setInterval(() => {
+    if (volcando) return;
+    volcando = true;
+    void db
+      .query('CHECKPOINT')
+      .catch(() => {
+        // Un volcado perdido no es motivo para detener el servidor: el
+        // siguiente lo cubre.
+      })
+      .finally(() => {
+        volcando = false;
+      });
+  }, 5000);
+
+  // Sin esto el proceso no terminaría solo al cerrar el servidor.
+  volcado.unref();
+
   // Cerrar sin avisar deja el directorio de datos a medio escribir.
   let stopping = false;
   const shutdown = async (): Promise<void> => {
     if (stopping) return;
     stopping = true;
     console.log('\nCerrando la base…');
+    clearInterval(volcado);
     await server.stop();
     await db.close();
     console.log('Datos guardados.');

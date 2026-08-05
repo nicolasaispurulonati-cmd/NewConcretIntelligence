@@ -1,0 +1,152 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Verificación y despliegue.
+#
+# Los principios de producto están escritos como pruebas. Este archivo es lo
+# que hace que eso signifique algo fuera de la máquina de quien programa: si un
+# cambio los rompe, no llega a producción.
+#
+# El despliegue automático de Vercel está apagado en apps/web/vercel.json. La
+# única forma de que main llegue a producción es este flujo, y sólo después de
+# que typecheck, pruebas y build hayan pasado.
+# ─────────────────────────────────────────────────────────────────────────
+
+name: Verificación
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Un push nuevo vuelve obsoleta la verificación anterior de la misma rama.
+concurrency:
+  group: verificacion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificacion:
+    name: Typecheck, pruebas y build
+    runs-on: ubuntu-latest
+
+    # Las pruebas de integración corren contra una base real y se saltan solas
+    # si no encuentran ninguna. Sin este servicio pasarían en verde sin haber
+    # probado nada, que es la peor forma de tener pruebas.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `ci` y no `install`: instala exactamente lo que dice package-lock.json.
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Va primero y no por costumbre: compila los paquetes en el orden del
+      # grafo. Las pruebas de cada paquete importan a los demás por su `dist`,
+      # y en un clon limpio ese `dist` todavía no existe. Sin este paso antes,
+      # fallan cuatro archivos de prueba por no encontrar los módulos.
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Crear el esquema
+        run: npm run db:migrate
+
+      # Sin un usuario en la base, las pruebas de integración se saltan.
+      - name: Sembrar roles y un usuario
+        run: npm run db:seed
+        env:
+          NCI_ADMIN_EMAIL: verificacion@newconcret.local
+          NCI_ADMIN_NAME: Verificación
+
+      - name: Pruebas
+        run: npm test
+
+      # Un build roto no lo detecta ninguna prueba, y es el que corre Vercel.
+      - name: Build
+        run: npm run build
+
+  despliegue:
+    name: Desplegar a producción
+    needs: verificacion
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      vars.DESPLIEGUE_AUTOMATICO == 'true'
+    runs-on: ubuntu-latest
+
+    # Permite exigir una aprobación manual desde la configuración del
+    # repositorio sin tocar este archivo.
+    environment: produccion
+
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Sólo @nci/db y lo que necesita. El script de migración importa el
+      # esquema, y el esquema importa @nci/domain por su `dist`.
+      - name: Compilar el paquete de base de datos
+        run: npx tsc -b packages/db
+
+      # Antes de desplegar, y no después: si falla, el código nuevo nunca llega
+      # a producción y lo que sigue corriendo es la versión anterior, que ya
+      # funcionaba.
+      #
+      # Corre contra el endpoint directo. Un pooler en modo transacción puede
+      # repartir cada sentencia en una sesión distinta, y una migración
+      # necesita que el lock que toma al empezar siga vivo cuando termina.
+      #
+      # Esto obliga a que cada migración sea compatible con la versión anterior
+      # del código: durante los segundos que separan este paso del despliegue,
+      # el esquema nuevo atiende al código viejo. Agregar columnas admite ese
+      # solapamiento; renombrar o borrar, no. Para esas va el despacho manual
+      # de migracion.yml.
+      - name: Migrar la base de producción
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_DIRECTA: ${{ secrets.DATABASE_URL_DIRECTA }}
+
+      - name: Instalar la CLI de Vercel
+        run: npm install --global vercel@latest
+
+      - name: Traer la configuración del proyecto
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Construir
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      # `--prebuilt` sube lo que se acaba de construir acá. Vercel no vuelve a
+      # compilar: lo que se despliega es exactamente lo que se verificó.
+      - name: Desplegar
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

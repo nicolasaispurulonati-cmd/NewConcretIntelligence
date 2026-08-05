@@ -8,6 +8,7 @@
 
 import postgres from 'postgres';
 
+import { parseConnectionUrl } from './client.js';
 import { loadEnv, requireDatabaseUrl } from './env.js';
 
 const REQUIRED_EXTENSIONS = ['vector', 'pg_trgm', 'unaccent'] as const;
@@ -17,8 +18,12 @@ async function main(): Promise<void> {
   const envPath = loadEnv();
   console.log(envPath ? `Configuración leída de ${envPath}` : 'Sin archivo .env: se usan las variables del entorno.');
 
-  const url = requireDatabaseUrl();
-  const client = postgres(url, { max: 1, ...(url.includes('sslmode=require') ? { ssl: 'require' as const } : {}) });
+  const conexion = parseConnectionUrl(requireDatabaseUrl());
+  const client = postgres(conexion.url, {
+    max: 1,
+    ...(conexion.ssl ? { ssl: 'require' as const } : {}),
+    ...(conexion.pooler ? { prepare: false } : {}),
+  });
 
   try {
     const [server] = await client<{ version: string; current_database: string }[]>`
@@ -26,8 +31,31 @@ async function main(): Promise<void> {
     `;
 
     const major = Number(/PostgreSQL (\d+)/.exec(server?.version ?? '')?.[1] ?? 0);
+    const esEmbebida = /PGlite/i.test(server?.version ?? '');
+
     console.log(`\nConexión establecida con la base "${server?.current_database}".`);
-    console.log(`PostgreSQL ${major}.`);
+    console.log(`PostgreSQL ${major}${esEmbebida ? ' embebida (PGlite)' : ''}.`);
+
+    // El ajuste que acomoda los límites de la base embebida, dejado puesto
+    // sobre un servidor real, serializa todas las consultas y hace que la
+    // aplicación siga sin poder convivir con una migración. Es un residuo de
+    // configuración que produce exactamente el síntoma que se creía resuelto.
+    const poolMax = Number(process.env['NCI_DB_POOL_MAX']);
+    if (!esEmbebida && Number.isFinite(poolMax) && poolMax === 1) {
+      console.log(
+        [
+          '',
+          'Aviso: NCI_DB_POOL_MAX está en 1, pero esta base no es la embebida.',
+          '',
+          'Ese valor existe sólo para acomodar el límite de PGlite, que atiende',
+          'un cliente por vez. Sobre un servidor real obliga a que todas las',
+          'consultas se hagan de a una, y la aplicación seguirá bloqueando las',
+          'migraciones aunque el servidor las admita.',
+          '',
+          'Quitá NCI_DB_POOL_MAX y NCI_DB_IDLE_TIMEOUT del .env.',
+        ].join('\n'),
+      );
+    }
 
     if (major < MINIMUM_MAJOR_VERSION) {
       console.log(

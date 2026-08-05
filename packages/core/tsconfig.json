@@ -4,6 +4,7 @@
     "rootDir": "./src",
     "outDir": "./dist"
   },
+  "references": [{ "path": "../domain" }, { "path": "../db" }],
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"]
 }

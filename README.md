@@ -2,81 +2,120 @@
 
 > Toda la inteligencia de NewConcret, en un solo lugar.
 
-La plataforma central de operación e inteligencia de NewConcret. No es un CRM, no es un ERP y no es un chatbot: es un grafo de conocimiento empresarial donde el centro son las entidades, no las pantallas.
+La plataforma central de operación e inteligencia de NewConcret. No es un CRM, no es un ERP y no es un chatbot: es un grafo de conocimiento empresarial donde el centro son las entidades y no las pantallas. Un producto, un cliente o un procedimiento son nodos con la misma forma, conectados por relaciones explícitas, de modo que abrir cualquiera de ellos muestra todo su universo sin importar desde qué área se entró. Sobre esa base, los permisos se asignan por capacidad y no por pantalla, y la inteligencia artificial asiste dentro de cada dominio sin poder ver jamás lo que la persona no podría ver por sí misma.
 
-## Documentación
+## Requisitos previos
 
-Los documentos de producto (`0.` a `7.`, en formato Word) definen qué es la plataforma. Su versión en texto plano, para consultar desde el código, está en [`docs/product/`](docs/product/).
-
-La arquitectura técnica que los traduce a código está en [`docs/08-technical-architecture.md`](docs/08-technical-architecture.md) — empezá por ahí.
-
-## Estructura
-
-| Paquete | Qué contiene |
+| | |
 |---|---|
-| [`packages/domain`](packages/domain) | El lenguaje oficial: dominios, entidades, relaciones, capacidades, roles. Sin dependencias de infraestructura. |
-| [`packages/db`](packages/db) | El esquema del grafo sobre PostgreSQL. |
-| [`packages/core`](packages/core) | Autorización, grafo, actividad, auditoría, búsqueda universal, sesiones. |
-| [`packages/design`](packages/design) | El Product Design Language en código: tokens y reglas de comportamiento. |
-| [`packages/ai`](packages/ai) | El AI Engine. No puede consultar la base sin un `Scope`. |
-| [`apps/web`](apps/web) | La aplicación: Workspace, búsqueda universal, Command Palette, vista de entidad. |
+| **Node.js 22 o superior** | El proyecto usa `process.loadEnvFile`, disponible desde la 20.12. Se verifica con `node -v`. |
+| **npm 10 o superior** | Viene con Node. El monorepo usa workspaces de npm; no hace falta pnpm ni yarn. |
+| **Docker Desktop** | Corre la base de datos de desarrollo. `winget install Docker.DockerDesktop`, reiniciar, y abrirlo una vez para que arranque el motor. Hay una alternativa sin instalar nada, más limitada: ver el paso 3. |
 
 ## Puesta en marcha
 
-Requiere Node 22+ y PostgreSQL 16+ con las extensiones `vector`, `pg_trgm` y `unaccent`.
+### 1. Dependencias
 
 ```bash
 npm install
 ```
 
-Copiá `.env.example` a `.env` — va en la raíz del proyecto, no dentro de cada paquete. Los valores que trae ya apuntan a la base local; sólo falta generar `NCI_SESSION_SECRET` y, si vas a usar el asistente, cargar `ANTHROPIC_API_KEY`.
+### 2. Variables de entorno
 
-### La base de datos
+Copiá `.env.example` a `.env`, en la raíz del proyecto y no dentro de cada paquete. Cada variable está documentada ahí con su propósito y si es obligatoria.
 
-En desarrollo no hace falta instalar nada. `npm run db:local` levanta PostgreSQL 18 con pgvector, `pg_trgm` y `unaccent`, compilado a WebAssembly y corriendo dentro del propio Node. Los datos quedan en `.data/`, que no se versiona.
+Para empezar alcanza con una sola línea:
+
+```
+DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:5432/postgres"
+```
+
+Ese valor sirve tal cual para las dos bases de desarrollo. Las credenciales coinciden a propósito: cambiar de una a otra no obliga a editar nada.
+
+### 3. La base de datos
 
 ```bash
 npm run db:local
 ```
 
-Dejá esa terminal abierta mientras trabajes. Se expone por el protocolo de PostgreSQL, así que el resto del sistema no la distingue de un servidor real: mismo driver, mismas migraciones, mismas consultas. Al pasar a producción sólo cambia `DATABASE_URL`.
+Levanta PostgreSQL 17 con pgvector en Docker y espera a que acepte conexiones antes de devolver el control, así que el comando siguiente nunca llega temprano. Los datos viven en un volumen que sobrevive a `db:down`.
 
-Tiene dos límites que conviene conocer, ambos propios del servidor embebido y ninguno del código de la plataforma:
+| Comando | Qué hace |
+|---|---|
+| `npm run db:local` | Levantar y esperar |
+| `npm run db:down` | Detener, conservando los datos |
+| `npm run db:reset` | Detener y borrar los datos |
+| `npm run db:logs` | Ver la salida del servidor |
 
-- **Atiende un cliente por vez.** Con la aplicación corriendo, los comandos `db:migrate`, `db:seed` y `user:password` no pueden conectarse. Detené la aplicación, corré el comando, y volvé a levantarla.
-- **Hay que cerrarla con Ctrl+C.** Si el proceso muere de golpe, el servidor queda con la conexión tomada y rechaza las siguientes: se resuelve reiniciándolo. Si además el directorio de datos quedó a medio escribir, borrá `.data/` y volvé a migrar.
-
-Si esa fricción molesta, `docker-compose.yml` levanta PostgreSQL 17 con pgvector y no tiene ninguno de los dos límites. Requiere instalar Docker Desktop.
+#### Alternativa sin instalar nada
 
 ```bash
-docker compose up -d --wait
+npm run db:embedded
 ```
 
-Para producción sirve cualquier PostgreSQL gestionado que ofrezca `vector`. Reemplazá `DATABASE_URL` por su cadena de conexión y borrá `NCI_DB_POOL_MAX` y `NCI_DB_IDLE_TIMEOUT` del `.env`: existen sólo para acomodar los límites de la base embebida.
+PostgreSQL 18 compilado a WebAssembly, corriendo dentro del propio Node. No requiere Docker y guarda los datos en `.data/`. Sirve para trabajar, con dos límites que Docker no tiene:
 
-Antes de migrar, verificá que se llega a la base y que están las extensiones. Si algo falta, el diagnóstico dice qué y por qué.
+- **Atiende un cliente por vez.** Con la aplicación corriendo no se puede migrar: hay que detenerla, migrar, y volver a levantarla.
+- **Se cierra con Ctrl+C.** Si el proceso muere de golpe, el servidor queda con la conexión tomada. Si además el directorio quedó a medio escribir, hay que borrar `.data/` y volver a migrar.
+
+Si se usa esta alternativa, agregar al `.env`:
+
+```
+NCI_DB_POOL_MAX="1"
+NCI_DB_IDLE_TIMEOUT="1"
+```
+
+Con Docker esas dos líneas se borran: el pool aprovecha las conexiones en paralelo, que es justamente lo que permite migrar sin detener la aplicación.
+
+Las dos escuchan en el puerto 5432, así que sólo puede estar una a la vez.
+
+#### Producción
+
+Cualquier PostgreSQL gestionado que ofrezca `vector`. Sólo cambia `DATABASE_URL`. El despliegue está armado sobre Neon: ver [Despliegue](#despliegue).
+
+### 4. Verificar la conexión
+
+Antes de migrar conviene comprobar que se llega a la base y que están las extensiones. Si falta algo, el diagnóstico dice qué y cómo resolverlo.
 
 ```bash
 npm run db:check
 ```
 
+### 5. Crear el esquema
+
 ```bash
 npm run db:migrate
 ```
 
-Sembrá los roles del sistema y creá el primer administrador. Queda invitado y define su contraseña al ingresar — el script nunca crea una contraseña por defecto.
+### 6. Sembrar roles y crear el primer usuario
+
+Carga los nueve roles del sistema con sus capacidades y crea un administrador. Queda **invitado**, sin contraseña: la siembra nunca crea una por defecto.
 
 ```bash
 NCI_ADMIN_EMAIL=tu@correo.com NCI_ADMIN_NAME="Tu Nombre" npm run db:seed
 ```
 
+### 7. Definir la contraseña
+
+Sin este paso no se puede ingresar. La pide por consola sin mostrarla mientras se escribe.
+
+```bash
+npm run user:password -- tu@correo.com
+```
+
+### 8. Levantar la aplicación
+
 ```bash
 npm run dev
 ```
 
-## Verificación
+Queda en `http://localhost:3000`.
 
-Los principios de producto están escritos como pruebas: si alguien viola uno, el build falla.
+> El rol Administrador del sistema no accede a los datos del negocio por defecto: administra usuarios, permisos e integraciones. Es deliberado. Para recorrer la plataforma con datos, `npm run demo:comercial` crea un usuario con rol Comercial, tres clientes y presupuestos en distintos estados.
+
+## Pruebas
+
+Los principios de producto están escritos como pruebas. Si un cambio viola uno, el build falla, y eso es correcto: se arregla el cambio, no la prueba.
 
 ```bash
 npm test
@@ -85,3 +124,150 @@ npm test
 ```bash
 npm run typecheck
 ```
+
+Las pruebas de integración de `@nci/sales` corren contra la base real y se saltan solas si no hay ninguna disponible, así que `npm test` sirve igual en una máquina recién clonada. Cuando corren, limpian lo que crearon.
+
+`npm run typecheck` compila los paquetes en el orden que impone el grafo de dependencias, no en el orden alfabético en que npm los recorre. Hay que correrlo antes que `npm test` en un clon limpio: las pruebas de cada paquete importan a los demás por su `dist`.
+
+## Despliegue
+
+La plataforma corre en **Vercel**, con la base en **Neon**. Dos decisiones sostienen todo lo demás:
+
+- El despliegue automático de Vercel sobre `main` está **apagado** ([`apps/web/vercel.json`](apps/web/vercel.json)). La única puerta a producción es la verificación de GitHub Actions.
+- Lo que se despliega es exactamente lo que se verificó. El flujo construye con `vercel build` y sube con `vercel deploy --prebuilt`: Vercel no vuelve a compilar por su cuenta.
+
+### 1. La base en Neon
+
+Crear un proyecto con PostgreSQL 17 en la región más cercana. Para Argentina, `sa-east-1` (São Paulo). Neon ofrece `vector`, `pg_trgm` y `unaccent`; la migración las instala sola.
+
+Del panel del proyecto salen **dos cadenas de conexión, y no son intercambiables**:
+
+| Cadena | Host | Para qué |
+|---|---|---|
+| **Pooled** | contiene `-pooler` | La aplicación. Reparte muchas conexiones efímeras sobre pocas reales, que es lo que necesita el serverless. |
+| **Direct** | sin `-pooler` | Las migraciones. Un pooler en modo transacción puede repartir cada sentencia en una sesión distinta, y una migración necesita que el lock que toma al empezar siga vivo cuando termina. |
+
+Si la cadena copiada trae `channel_binding`, se puede dejar tal cual: el cliente lo quita antes de conectar. Sin eso, el servidor rechazaría la conexión entera con un error que señala al servidor y no a la cadena.
+
+### 2. Crear el esquema por primera vez
+
+Antes de que exista el proyecto en Vercel, desde cualquier máquina:
+
+```bash
+DATABASE_URL="LA_CADENA_DIRECTA" npm run db:check
+```
+
+```bash
+DATABASE_URL="LA_CADENA_DIRECTA" npm run db:migrate
+```
+
+```bash
+DATABASE_URL="LA_CADENA_DIRECTA" NCI_ADMIN_EMAIL="tu@correo.com" npm run db:seed
+```
+
+```bash
+DATABASE_URL="LA_CADENA_DIRECTA" npm run user:password -- tu@correo.com
+```
+
+De acá en adelante las migraciones las aplica el flujo de despliegue.
+
+### 3. El proyecto en Vercel
+
+Importar el repositorio y cambiar **una sola cosa**:
+
+> **Root Directory: `apps/web`**
+
+Con eso Vercel detecta Next.js, instala desde la raíz del monorepo — donde están los workspaces — y compila con el `build` de `apps/web`, que construye los paquetes antes que la aplicación. Build Command y Output Directory se dejan como vienen.
+
+Después, cargar las variables de entorno de la tabla de más abajo.
+
+### 4. Conectar el despliegue a la verificación
+
+En el repositorio de GitHub, en Settings → Secrets and variables → Actions:
+
+| Secret | De dónde sale |
+|---|---|
+| `DATABASE_URL` | La cadena pooled de Neon |
+| `DATABASE_URL_DIRECTA` | La cadena directa de Neon |
+| `VERCEL_TOKEN` | Vercel → Account Settings → Tokens |
+| `VERCEL_ORG_ID` | `.vercel/project.json`, tras correr `vercel link` |
+| `VERCEL_PROJECT_ID` | El mismo archivo |
+
+Y una variable, en la pestaña **Variables**:
+
+| Variable | Valor |
+|---|---|
+| `DESPLIEGUE_AUTOMATICO` | `true` |
+
+Hasta que esa variable exista, la verificación corre pero el despliegue no. Es deliberado: un repositorio todavía sin vincular no debería fallar en rojo en cada push. Mientras tanto se despliega a mano con `vercel --prod`.
+
+### Variables de entorno en producción
+
+Todo lo que no está acá tiene un valor por defecto correcto. [`.env.example`](.env.example) documenta cada una en detalle.
+
+| Variable | Dónde va | Obligatoria | Qué es |
+|---|---|---|---|
+| `DATABASE_URL` | Vercel y GitHub | Sí | La cadena **pooled** de Neon |
+| `DATABASE_URL_DIRECTA` | GitHub | Sí | La cadena **directa**. La aplicación no la lee nunca: sólo las migraciones |
+| `ANTHROPIC_API_KEY` | Vercel | No | Sin ella la plataforma funciona completa salvo el asistente |
+| `NCI_AI_MODEL` | Vercel | No | Por defecto `claude-opus-5` |
+| `NCI_DB_POOL_MAX` | Vercel | No | Vacía. En Vercel el perfil serverless ya usa 1 conexión por instancia |
+| `NCI_DB_IDLE_TIMEOUT` | Vercel | No | Vacía. En Vercel ya cierra a los 20 segundos |
+| `NCI_DB_CONNECT_TIMEOUT` | Vercel | No | Vacía. Por defecto 10 segundos |
+| `NCI_BRIDGE_SHARED_SECRET` | — | No | Reservada para el puente hacia Tango. Hoy ningún código la lee |
+
+`NODE_ENV` no se define a mano: la fija Vercel.
+
+### Cómo llega un cambio a producción
+
+```
+push a main
+   ↓
+typecheck · migraciones y siembra sobre un PostgreSQL efímero · pruebas · build
+   ↓  (si algo falla, termina acá)
+migrar la base de producción por la conexión directa
+   ↓
+vercel build  →  vercel deploy --prebuilt
+```
+
+El flujo está en [`.github/workflows/verificacion.yml`](.github/workflows/verificacion.yml). Las pruebas de integración corren contra un PostgreSQL con pgvector levantado como servicio del job: sin él se saltarían solas y el verde no significaría nada.
+
+### Migraciones
+
+Las aplica el despliegue, antes de subir el código nuevo. Eso deja unos segundos en los que el esquema nuevo atiende al código anterior, y de ahí sale la única regla:
+
+> Una migración automática tiene que ser compatible con la versión de código que ya está corriendo.
+
+Agregar una tabla, agregar una columna que admite nulos, agregar un índice: todo eso admite el solapamiento. Renombrar, borrar, cambiar un tipo o volver obligatoria una columna, no.
+
+Para esas está [`.github/workflows/migracion.yml`](.github/workflows/migracion.yml), que se dispara a mano desde la pestaña Actions y pide escribir una confirmación. El orden es siempre el mismo: primero se despliega el código que ya no usa lo que se va a borrar, después se comprueba que nada lo usa, y recién entonces se corre la migración.
+
+### Estado de la plataforma
+
+```
+GET /api/salud
+```
+
+Responde sin sesión, porque la consulta un monitoreo externo. Devuelve `200` con `estado: "operativa"`, o `503` con `estado: "degradada"` cuando la aplicación responde pero no llega a la base.
+
+No dice nada más. Ni el host, ni la versión del servidor, ni el texto del error: un fallo de conexión mal contado es un mapa de la infraestructura publicado en internet. La causa queda en el log de la función, que es donde puede leerla quien corresponde.
+
+## Estructura
+
+| Paquete | Qué contiene |
+|---|---|
+| [`packages/domain`](packages/domain) | El lenguaje oficial del negocio: dominios, entidades, relaciones, capacidades y roles. Sin dependencias de infraestructura. |
+| [`packages/db`](packages/db) | El esquema del grafo sobre PostgreSQL, las migraciones y la base local embebida. |
+| [`packages/core`](packages/core) | El motor: autorización por capacidades, grafo de entidades, actividad, auditoría, búsqueda universal y sesiones. |
+| [`packages/design`](packages/design) | El Product Design Language en código: tokens visuales y reglas de comportamiento verificables. |
+| [`packages/ai`](packages/ai) | El AI Engine. Sólo accede a datos a través de `@nci/core` con un `Scope`, nunca a la base directamente. |
+| [`packages/sales`](packages/sales) | El dominio comercial: el presupuesto como entidad, con estados, versiones y aritmética de dinero en centavos. |
+| [`apps/web`](apps/web) | La aplicación: Workspace por rol, búsqueda universal, Command Palette y vista de entidad. |
+
+## Arquitectura
+
+[`docs/08-technical-architecture.md`](docs/08-technical-architecture.md) explica cómo cada decisión técnica responde a un principio de producto. Es el punto de entrada para entender por qué el código está organizado así.
+
+[`docs/09-estado-actual.md`](docs/09-estado-actual.md) describe qué está construido, qué está a medias y qué decisiones quedan abiertas.
+
+Los documentos de producto que definen la visión, el modelo de dominio y la arquitectura funcional se mantienen fuera del control de versiones.

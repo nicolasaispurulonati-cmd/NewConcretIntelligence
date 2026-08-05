@@ -1,0 +1,70 @@
+# ─────────────────────────────────────────────────────────────────────────
+# Migración manual de la base de producción.
+#
+# El despliegue ya migra solo. Este flujo existe para las migraciones que no
+# admiten hacerse solas: borrar una columna, cambiar un tipo, mover datos de un
+# lado a otro. Todas comparten una propiedad — durante un rato hay código vivo
+# que espera el esquema anterior — y por eso el momento lo tiene que elegir una
+# persona, no un push.
+#
+# El orden habitual de una migración destructiva son dos despliegues:
+#
+#   1. Desplegar el código que ya no usa lo que se va a borrar.
+#   2. Comprobar que nada lo usa.
+#   3. Recién ahí, correr esto.
+# ─────────────────────────────────────────────────────────────────────────
+
+name: Migrar producción
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmacion:
+        description: 'Escribir "migrar produccion" para confirmar'
+        required: true
+        type: string
+
+jobs:
+  migracion:
+    name: Aplicar migraciones
+    runs-on: ubuntu-latest
+
+    # Permite exigir una aprobación de otra persona desde la configuración del
+    # repositorio, sin tocar este archivo.
+    environment: produccion
+
+    steps:
+      # Un despacho manual se puede disparar de un clic desde el teléfono. La
+      # frase escrita a mano es el segundo par de ojos.
+      - name: Verificar la confirmación
+        if: inputs.confirmacion != 'migrar produccion'
+        run: |
+          echo "La confirmación no coincide. No se aplicó ninguna migración."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar el paquete de base de datos
+        run: npx tsc -b packages/db
+
+      # Deja en el registro del flujo el estado con el que se encontró: qué
+      # versión del servidor, qué extensiones y cuántas tablas había antes de
+      # tocar nada.
+      - name: Diagnosticar la base
+        run: npm run db:check
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_DIRECTA }}
+
+      - name: Migrar
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_DIRECTA: ${{ secrets.DATABASE_URL_DIRECTA }}
