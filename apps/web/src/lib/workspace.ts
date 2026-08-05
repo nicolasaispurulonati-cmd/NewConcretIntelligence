@@ -15,13 +15,28 @@ import type { Scope } from '@nci/core';
 import { activity, entities, notifications, quotes, workspaceWidgets } from '@nci/db';
 import { ROLES, type RoleId } from '@nci/domain';
 import { formatRelativeTime, metric, type Metric } from '@nci/design';
-import { formatMoney, openQuoteTotals, type OpenQuoteTotals } from '@nci/sales';
+import {
+  countAwaitingResponse,
+  formatMoney,
+  openQuoteTotals,
+  type OpenQuoteTotals,
+} from '@nci/sales';
 
 export interface WidgetRenderable {
   readonly id: string;
   readonly title: string;
   readonly metric?: Metric;
   readonly lines?: readonly { readonly primary: string; readonly secondary: string }[];
+  /**
+   * Cuántos elementos existen más allá de los que se listan.
+   *
+   * Una lista truncada que no lo dice es indistinguible de una completa. Quien
+   * la mira se forma una creencia sobre el total y decide con ella, que es el
+   * mismo defecto del indicador que sumaba las filas visibles — con otra forma.
+   *
+   * Se declara sólo donde alguien decide algo mirando la lista.
+   */
+  readonly truncatedCount?: number;
   /** Cuando el widget no tiene nada que mostrar, dice por qué y qué hacer. */
   readonly emptyMessage?: string;
 }
@@ -94,29 +109,37 @@ const REGISTRY: Record<string, WidgetLoader> = {
   'crm.follow_ups': async (scope) => {
     if (!scope.actor.canActOn('quote', 'read')) return null;
 
-    const rows = await scope.db
-      .select({
-        number: quotes.number,
-        customer: entities.subtitle,
-        total: quotes.total,
-        currency: quotes.currency,
-        sentAt: quotes.sentAt,
-      })
-      .from(quotes)
-      .innerJoin(entities, eq(entities.id, quotes.entityId))
-      .where(
-        and(
-          eq(entities.status, 'enviado'),
-          isNull(quotes.respondedAt),
-          isNull(entities.archivedAt),
-        ),
-      )
-      .orderBy(quotes.sentAt)
-      .limit(LISTA_MAXIMA);
+    // La lista y el total, por separado. El total no puede salir de la lista:
+    // ése es exactamente el error que ya se corrigió en el indicador de
+    // comprometido, y acá el costo de repetirlo es un seguimiento que nadie
+    // hace porque nunca supo que existía.
+    const [rows, esperando] = await Promise.all([
+      scope.db
+        .select({
+          number: quotes.number,
+          customer: entities.subtitle,
+          total: quotes.total,
+          currency: quotes.currency,
+          sentAt: quotes.sentAt,
+        })
+        .from(quotes)
+        .innerJoin(entities, eq(entities.id, quotes.entityId))
+        .where(
+          and(
+            eq(entities.status, 'enviado'),
+            isNull(quotes.respondedAt),
+            isNull(entities.archivedAt),
+          ),
+        )
+        .orderBy(quotes.sentAt)
+        .limit(LISTA_MAXIMA),
+      countAwaitingResponse(scope),
+    ]);
 
     return {
       id: 'crm.follow_ups',
       title: 'Esperan respuesta',
+      truncatedCount: Math.max(0, esperando - rows.length),
       lines: rows.map((row) => ({
         primary: `${row.customer ?? 'Cliente'} · ${row.number}`,
         secondary: row.sentAt

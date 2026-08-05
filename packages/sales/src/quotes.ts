@@ -9,7 +9,7 @@
  * criterios distintos sobre el mismo documento.
  */
 
-import { and, asc, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, like, sql } from 'drizzle-orm';
 
 import {
   ValidationError,
@@ -575,6 +575,34 @@ export async function openQuoteTotals(
     drafts: Number(row.drafts),
     awaiting: Number(row.awaiting),
   }));
+}
+
+/**
+ * Cuántos presupuestos esperan respuesta del cliente.
+ *
+ * El conteo completo, sin límite. Existe porque la pantalla lista unos pocos y
+ * necesita poder decir cuántos quedaron afuera: un vendedor que ve seis
+ * seguimientos y actúa como si fueran todos se forma una creencia falsa, y acá
+ * el costo es un seguimiento que nunca se hace.
+ *
+ * Vive en el dominio y no en el widget, por D-008.
+ */
+export async function countAwaitingResponse(scope: Scope): Promise<number> {
+  scope.actor.assertCanActOn('quote', 'read');
+
+  const [fila] = await scope.db
+    .select({ total: count() })
+    .from(quotes)
+    .innerJoin(entities, eq(entities.id, quotes.entityId))
+    .where(
+      and(
+        eq(entities.status, 'enviado'),
+        isNull(quotes.respondedAt),
+        isNull(entities.archivedAt),
+      ),
+    );
+
+  return Number(fila?.total ?? 0);
 }
 
 /** El cliente al que se le emitió, según el grafo. */

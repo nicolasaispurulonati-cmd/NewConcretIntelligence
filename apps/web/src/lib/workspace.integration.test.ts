@@ -29,7 +29,7 @@ import {
   type Database,
 } from '@nci/db';
 import { ROLES } from '@nci/domain';
-import { addQuoteItem, createQuote } from '@nci/sales';
+import { addQuoteItem, countAwaitingResponse, createQuote, sendQuote } from '@nci/sales';
 
 import { LISTA_MAXIMA, loadWorkspace } from './workspace.js';
 
@@ -134,13 +134,85 @@ async function presupuestoAbierto(
   });
 }
 
-/** El widget de presupuestos del escritorio de esta persona. */
-async function widgetDePresupuestos(scope: Scope) {
+/** Un presupuesto ya enviado y sin respuesta: lo que espera seguimiento. */
+async function presupuestoEnviado(
+  scope: Scope,
+  customerId: string,
+  unitPrice: number,
+): Promise<void> {
+  const presupuesto = await createQuote(scope, { customerId });
+  entidades.push(presupuesto.entity.id);
+  await addQuoteItem(scope, presupuesto.entity.id, {
+    description: 'Concret D',
+    quantity: 1,
+    unitPrice,
+  });
+  await sendQuote(scope, presupuesto.entity.id, 'correo');
+}
+
+/** Un widget del escritorio de esta persona, por identificador. */
+async function widgetPorId(scope: Scope, id: string) {
   const { widgets } = await loadWorkspace(scope);
-  const widget = widgets.find((w) => w.id === 'sales.my_quotes');
-  assert.ok(widget, 'el escritorio del rol Comercial tiene que traer sus presupuestos');
+  const widget = widgets.find((w) => w.id === id);
+  assert.ok(widget, `el escritorio del rol Comercial tiene que traer "${id}"`);
   return widget;
 }
+
+/** El widget de presupuestos del escritorio de esta persona. */
+async function widgetDePresupuestos(scope: Scope) {
+  return widgetPorId(scope, 'sales.my_quotes');
+}
+
+/**
+ * Seguimientos que esperan respuesta.
+ *
+ * A diferencia del widget de presupuestos, éste no filtra por dueño: muestra
+ * los de toda la empresa. Por eso no se afirman valores absolutos —la base de
+ * desarrollo tiene presupuestos de otras corridas— sino la relación que une el
+ * número declarado con el agregado del dominio. Esa relación es el seam.
+ */
+describe('Seguimientos que esperan respuesta', () => {
+  it('declara cuántos quedan afuera cuando la lista está truncada', async () => {
+    const scope = await nuevoVendedor('seguimientos');
+    const customerId = await nuevoCliente(scope, 'seguimientos');
+
+    // Suficientes para desbordar la lista con margen, sin depender de cuántos
+    // hubiera antes: si ya había, mejor, el desborde es mayor.
+    for (let i = 0; i < LISTA_MAXIMA + 3; i += 1) {
+      await presupuestoEnviado(scope, customerId, 10_000);
+    }
+
+    const widget = await widgetPorId(scope, 'crm.follow_ups');
+    const enEspera = await countAwaitingResponse(scope);
+
+    assert.equal(widget.lines?.length, LISTA_MAXIMA, 'la lista muestra su límite');
+    assert.ok(
+      (widget.truncatedCount ?? 0) > 0,
+      'con más en espera que filas visibles, tiene que avisar que hay más',
+    );
+
+    // El seam: el número declarado sale del conteo del dominio, no de la lista.
+    assert.equal(
+      widget.truncatedCount,
+      enEspera - LISTA_MAXIMA,
+      'lo que se declara afuera tiene que ser exactamente lo que el agregado no mostró',
+    );
+  });
+
+  it('sin truncamiento no declara nada', async () => {
+    // El caso que evita que el aviso se vuelva ruido permanente: con la lista
+    // completa, el widget no dice que falte nada.
+    const scope = await nuevoVendedor('sin-truncar');
+    const widget = await widgetPorId(scope, 'crm.follow_ups');
+    const enEspera = await countAwaitingResponse(scope);
+
+    if (enEspera <= LISTA_MAXIMA) {
+      assert.equal(widget.truncatedCount, 0);
+    } else {
+      assert.equal(widget.truncatedCount, enEspera - LISTA_MAXIMA);
+    }
+  });
+});
 
 describe('Comprometido en presupuestos abiertos', () => {
   /**

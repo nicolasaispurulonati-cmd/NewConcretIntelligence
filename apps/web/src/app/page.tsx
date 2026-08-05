@@ -61,6 +61,18 @@ export default async function WorkspacePage(): Promise<React.ReactElement> {
                 ) : (
                   <p className="widget__asof">{widget.emptyMessage}</p>
                 )}
+
+                {/*
+                  Una lista truncada que no lo dice es indistinguible de una
+                  completa, y quien la mira decide con el total que se imagina.
+                */}
+                {widget.truncatedCount !== undefined && widget.truncatedCount > 0 && (
+                  <p className="widget__asof">
+                    {widget.truncatedCount === 1
+                      ? 'Hay 1 más que no entra en esta lista.'
+                      : `Hay ${widget.truncatedCount} más que no entran en esta lista.`}
+                  </p>
+                )}
               </article>
             );
           })}
