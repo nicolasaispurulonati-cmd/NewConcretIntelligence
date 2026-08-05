@@ -14,3 +14,4 @@ export * from './relations.js';
 export * from './roles.js';
 export * from './provenance.js';
 export * from './money.js';
+export * from './customer.js';

@@ -1,0 +1,27 @@
+{
+  "name": "@nci/crm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "El dominio CRM: el cliente, su alta y su identificación.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node ../../scripts/correr.mjs \"src/**/!(*.integration).test.ts\" -- --import tsx",
+    "test:integracion": "node ../../scripts/correr.mjs \"src/**/*.integration.test.ts\" -- --import tsx --test-concurrency=1"
+  },
+  "dependencies": {
+    "@nci/core": "*",
+    "@nci/db": "*",
+    "@nci/domain": "*",
+    "drizzle-orm": "^0.44.5"
+  }
+}

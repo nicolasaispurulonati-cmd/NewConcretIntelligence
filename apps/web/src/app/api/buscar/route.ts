@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 
 import { isNciError, search } from '@nci/core';
+import { isEntityTypeId } from '@nci/domain';
 
 import { getScope } from '@/lib/session';
 
@@ -18,13 +19,19 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ hits: [] }, { status: 401 });
   }
 
-  const term = new URL(request.url).searchParams.get('q')?.trim() ?? '';
+  const parametros = new URL(request.url).searchParams;
+  const term = parametros.get('q')?.trim() ?? '';
   if (term.length < 2) {
     return NextResponse.json({ hits: [] });
   }
 
+  // Acotar por tipo es un parámetro, no una ruta nueva: la detección de
+  // duplicados al dar de alta un cliente es la misma búsqueda con un filtro.
+  const tipo = parametros.get('tipo');
+  const tipos = tipo && isEntityTypeId(tipo) ? [tipo] : undefined;
+
   try {
-    const hits = await search(scope, term, { limit: 12 });
+    const hits = await search(scope, term, { limit: 12, ...(tipos ? { types: tipos } : {}) });
     return NextResponse.json({
       hits: hits.map((hit) => ({
         id: hit.id,
