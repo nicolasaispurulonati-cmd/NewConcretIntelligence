@@ -38,6 +38,20 @@ export interface RetrievedContext {
    * puede verlo — pero nunca revela de qué se trata.
    */
   readonly restrictedCount: number;
+  /**
+   * Cuántos elementos relacionados esta persona **sí puede consultar** y no
+   * están en este contexto porque no entraron.
+   *
+   * Se recorta en dos lugares y los dos cuentan: el universo devuelve hasta
+   * cierto número de vecinos, y de esos entran acá los que quepan en el tope
+   * de contexto. Un modelo que no sabe esto opera sobre un universo recortado
+   * creyéndolo completo, y eso es peor que en la interfaz: una persona frente
+   * a una lista larga puede sospechar, un resumen generado se lee como total.
+   *
+   * Va por separado de `restrictedCount` porque las causas son distintas: una
+   * se resuelve pidiendo permiso, la otra ampliando la consulta.
+   */
+  readonly truncatedCount: number;
   /** Qué se buscó. Se le informa a la IA para que pueda explicar una respuesta vacía. */
   readonly searched: string;
 }
@@ -61,6 +75,7 @@ export async function retrieveContext(
   const items: ContextItem[] = [];
   const seen = new Set<string>();
   let restrictedCount = 0;
+  let truncatedCount = 0;
 
   // El foco primero: si el usuario pregunta mirando Concret D, Concret D y su
   // universo pesan más que cualquier coincidencia de texto.
@@ -87,9 +102,22 @@ export async function retrieveContext(
     });
     seen.add(universe.entity.id);
 
+    // Lo que el universo ya había cortado por su propio límite.
+    truncatedCount = universe.truncatedCount;
+
     for (const section of universe.sections) {
       for (const node of section.nodes) {
-        if (seen.has(node.id) || items.length >= maxItems) continue;
+        if (seen.has(node.id)) continue;
+
+        // Y lo que llegó hasta acá pero no entra en el tope de contexto. Sin
+        // esta cuenta, el segundo recorte era invisible: el universo devuelve
+        // hasta doscientos vecinos y acá entran veinticuatro elementos en
+        // total, así que es el recorte que se alcanza siempre primero.
+        if (items.length >= maxItems) {
+          truncatedCount += 1;
+          continue;
+        }
+
         items.push({
           entityId: node.id,
           entityType: node.type,
@@ -120,7 +148,7 @@ export async function retrieveContext(
     }
   }
 
-  return { items, restrictedCount, searched: options.question };
+  return { items, restrictedCount, truncatedCount, searched: options.question };
 }
 
 function toContextItem(hit: SearchHit): ContextItem {
@@ -170,10 +198,21 @@ export function renderContext(context: RetrievedContext): string {
     return parts.filter(Boolean).join('\n');
   });
 
-  const footer =
+  // Dos avisos distintos y separados, por las mismas razones que en la
+  // interfaz: uno se resuelve pidiendo permiso y el otro ampliando la
+  // consulta, y confundirlos deja sin saber cuál está actuando.
+  const restringido =
     context.restrictedCount > 0
       ? `\n\nAdemás existen ${context.restrictedCount} elementos relacionados que esta persona no está autorizada a consultar. No los menciones ni especules sobre su contenido; tenelos en cuenta sólo para no afirmar que algo no existe.`
       : '';
 
-  return `Información disponible para responder (ya filtrada por los permisos de esta persona):\n\n${lines.join('\n\n')}${footer}`;
+  // El truncamiento sí se declara en la respuesta, al revés que lo restringido.
+  // Decir "hay más y no los vi" es información que le sirve a quien pregunta;
+  // decir qué son los restringidos sería una filtración.
+  const truncado =
+    context.truncatedCount > 0
+      ? `\n\nEste contexto está incompleto: estás viendo ${context.items.length} elementos y hay ${context.truncatedCount} más que esta persona sí puede consultar y que no entraron por el límite de la consulta. Declaralo en missingInformation, diciendo cuántos viste sobre cuántos hay. Una respuesta que resume un conjunto recortado sin decirlo se lee como si fuera del conjunto entero.`
+      : '';
+
+  return `Información disponible para responder (ya filtrada por los permisos de esta persona):\n\n${lines.join('\n\n')}${restringido}${truncado}`;
 }

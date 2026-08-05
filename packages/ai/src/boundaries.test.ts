@@ -191,8 +191,12 @@ describe('Sin autorización no se recupera contexto', () => {
 });
 
 describe('restrictedCount llega al modelo', () => {
-  function contexto(restrictedCount: number, items: RetrievedContext['items'] = []): RetrievedContext {
-    return { items, restrictedCount, searched: 'Concret D' };
+  function contexto(
+    restrictedCount: number,
+    items: RetrievedContext['items'] = [],
+    truncatedCount = 0,
+  ): RetrievedContext {
+    return { items, restrictedCount, truncatedCount, searched: 'Concret D' };
   }
 
   it('con contexto vacío informa cuántos elementos quedan fuera de alcance', () => {
@@ -234,5 +238,70 @@ describe('restrictedCount llega al modelo', () => {
     const texto = renderContext(contexto(4));
     // Sólo el número. Cualquier detalle sería una filtración por otra vía.
     assert.equal((texto.match(/\b4\b/g) ?? []).length, 1);
+  });
+});
+
+/**
+ * Un contexto recortado tiene que llegarle al modelo como recortado.
+ *
+ * Es peor que el mismo defecto en la interfaz. Una persona frente a una lista
+ * larga puede sospechar que hay más; un resumen generado se lee como completo.
+ * Y el contrato de respuesta agrava el problema en vez de contenerlo: obliga a
+ * declarar fuentes y confianza, así que un modelo que ignora el truncamiento
+ * produce una respuesta con toda la estructura de rigor intacta sobre un
+ * conjunto incompleto. El formato la hace parecer más confiable, no menos.
+ */
+describe('El truncamiento llega al modelo', () => {
+  const unItem: RetrievedContext['items'] = [
+    {
+      entityId: 'abc',
+      entityType: 'product',
+      typeName: 'Producto',
+      displayName: 'Concret D',
+      subtitle: null,
+      status: 'activo',
+      updatedAt: '2026-08-06T12:00:00.000Z',
+      via: 'foco',
+      detail: {},
+    },
+  ];
+
+  function contextoRecortado(truncatedCount: number, restrictedCount = 0): RetrievedContext {
+    return { items: unItem, restrictedCount, truncatedCount, searched: 'Concret D' };
+  }
+
+  it('dice cuántos vio sobre cuántos hay', () => {
+    const texto = renderContext(contextoRecortado(339));
+
+    assert.match(texto, /contexto está incompleto/);
+    assert.match(texto, /1 elementos/, 'cuántos vio');
+    assert.match(texto, /339 más/, 'cuántos quedaron afuera');
+  });
+
+  it('exige declararlo en missingInformation', () => {
+    // El contrato ya tiene el campo. Sin esta instrucción, el truncamiento
+    // quedaría como dato interno y la respuesta saldría igual de segura.
+    const texto = renderContext(contextoRecortado(50));
+
+    assert.match(texto, /missingInformation/);
+  });
+
+  it('sin truncamiento no dice nada', () => {
+    // Para que el aviso signifique algo cuando aparece.
+    const texto = renderContext(contextoRecortado(0));
+
+    assert.ok(!/contexto está incompleto/.test(texto));
+    assert.ok(!/missingInformation/.test(texto));
+  });
+
+  it('lo recortado y lo restringido son dos avisos distintos', () => {
+    const texto = renderContext(contextoRecortado(12, 5));
+
+    assert.match(texto, /12 más que esta persona sí puede consultar/);
+    assert.match(texto, /5 elementos relacionados que esta persona no está autorizada/);
+
+    // El que no puede ver no se declara en la respuesta; el que no vio, sí.
+    // Confundirlos sería filtrar por un lado o mentir por el otro.
+    assert.match(texto, /No los menciones ni especules/);
   });
 });
