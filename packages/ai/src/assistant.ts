@@ -21,11 +21,6 @@ import { renderContext, retrieveContext, type RetrievedContext } from './retriev
 export interface AssistantConfig {
   readonly apiKey?: string;
   readonly model?: string;
-  /**
-   * Profundidad de razonamiento. `high` es el equilibrio correcto para
-   * consultas de negocio; `xhigh` conviene en análisis ejecutivo.
-   */
-  readonly effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   readonly maxTokens?: number;
 }
 
@@ -48,13 +43,11 @@ const DEFAULT_MODEL = 'claude-opus-5';
 export class Assistant {
   private readonly client: Anthropic;
   private readonly model: string;
-  private readonly effort: NonNullable<AssistantConfig['effort']>;
   private readonly maxTokens: number;
 
   constructor(config: AssistantConfig = {}) {
     this.client = new Anthropic(config.apiKey ? { apiKey: config.apiKey } : {});
     this.model = config.model ?? process.env['NCI_AI_MODEL'] ?? DEFAULT_MODEL;
-    this.effort = config.effort ?? 'high';
     this.maxTokens = config.maxTokens ?? 16000;
   }
 
@@ -73,17 +66,20 @@ export class Assistant {
       ...(request.domain ? { domain: request.domain } : {}),
     });
 
-    const response = await this.client.beta.messages.create({
+    // Sólo superficie estable del SDK: cada campo de acá está en los tipos
+    // publicados, así que un cambio de la API rompe el build y no la ejecución.
+    //
+    // `thinking` se omite a propósito. En los modelos actuales, omitirlo activa
+    // el razonamiento adaptativo, que es el comportamiento que se quiere; la
+    // única alternativa tipada — `enabled` con `budget_tokens` — está removida
+    // en esos modelos y devolvería un error.
+    const response = await this.client.messages.create({
       model: this.model,
       max_tokens: this.maxTokens,
-      // Las clasificaciones de seguridad pueden rechazar una consulta; el
-      // reemplazo automático evita que una operación legítima quede sin
-      // respuesta por un falso positivo.
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      thinking: { type: 'adaptive' },
       output_config: {
-        effort: this.effort,
+        // El contrato de respuesta se impone acá: la API sólo puede devolver
+        // esta forma. No es que sea improbable que falte la justificación o
+        // las fuentes: es imposible.
         format: { type: 'json_schema', schema: ANSWER_SCHEMA },
       },
       system: buildSystemPrompt({
@@ -96,11 +92,9 @@ export class Assistant {
           content: `${renderContext(context)}\n\n---\n\nPregunta: ${request.question}`,
         },
       ],
-      // `fallbacks` y `output_config.format` todavía no están en los tipos
-      // publicados del SDK; el cuerpo es válido contra la API.
-    } as never);
+    });
 
-    const answer = this.readAnswer(response as Anthropic.Beta.BetaMessage);
+    const answer = this.readAnswer(response);
 
     await recordAudit(scope, {
       action: 'ai.assist',
@@ -122,7 +116,7 @@ export class Assistant {
    * Un rechazo llega como una respuesta exitosa con contenido vacío. Leer
    * `content[0]` sin verificar `stop_reason` rompe justo cuando algo salió mal.
    */
-  private readAnswer(message: Anthropic.Beta.BetaMessage): AiAnswer {
+  private readAnswer(message: Anthropic.Message): AiAnswer {
     if (message.stop_reason === 'refusal') {
       return {
         answer: 'No puedo responder esta consulta.',
@@ -142,7 +136,7 @@ export class Assistant {
     }
 
     const text = message.content.find(
-      (block): block is Anthropic.Beta.BetaTextBlock => block.type === 'text',
+      (block): block is Anthropic.TextBlock => block.type === 'text',
     );
 
     if (!text) {
