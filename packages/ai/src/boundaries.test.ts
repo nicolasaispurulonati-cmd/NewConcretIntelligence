@@ -128,8 +128,15 @@ describe('El paquete no puede alcanzar la base', () => {
 });
 
 describe('Sin autorización no se recupera contexto', () => {
-  /** El asistente se construye con una clave inerte: nunca llega a usarse. */
-  const asistente = new Assistant({ apiKey: 'clave-de-prueba-sin-uso' });
+  /**
+   * El asistente se construye con un marcador de posición, no con una clave.
+   *
+   * Nunca llega a usarse: estas pruebas verifican que el rechazo ocurre antes
+   * de cualquier llamada. El texto se elige para que se lea como lo que es —
+   * una cadena parecida a una clave, en un repositorio público, dispara
+   * escáneres de secretos y hace perder el tiempo a quien los revisa.
+   */
+  const asistente = new Assistant({ apiKey: 'no-es-una-clave-marcador-de-posicion' });
 
   function actorCon(capacidades: readonly string[]): Actor {
     return new Actor({

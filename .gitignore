@@ -47,14 +47,6 @@ npm-debug.log*
 Thumbs.db
 
 # ─────────────────────────────────────────────────────────────
-# Datos de la base local
-#
-# PGlite guarda acá el cluster de PostgreSQL embebido. Son datos de
-# desarrollo: se recrean con db:migrate y db:seed.
-# ─────────────────────────────────────────────────────────────
-.data/
-
-# ─────────────────────────────────────────────────────────────
 # Documentos de producto de NewConcret
 #
 # Definen la visión, el modelo de dominio y la arquitectura funcional del
