@@ -1,0 +1,15 @@
+{
+  // El mismo proyecto, con una sola diferencia: cómo se transforma el JSX.
+  //
+  // Next exige `jsx: "preserve"` en tsconfig.json y lo reescribe si alguien lo
+  // cambia, porque transforma el JSX con su propio pipeline. Al correr las
+  // pruebas no hay pipeline de Next: el JSX preservado llega a Node, que no
+  // sabe qué hacer con él.
+  //
+  // `react-jsx` usa el runtime automático, que no necesita `React` en alcance.
+  // Este archivo existe sólo para el corredor de pruebas y Next no lo mira.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  }
+}

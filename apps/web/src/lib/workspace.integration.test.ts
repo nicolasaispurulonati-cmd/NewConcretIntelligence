@@ -214,6 +214,53 @@ describe('Seguimientos que esperan respuesta', () => {
   });
 });
 
+/**
+ * Que el widget de métrica entregue de qué está compuesto.
+ *
+ * `page.tsx` descartaba `widget.lines` cuando había métrica: el vendedor veía
+ * cuánto tenía comprometido y no con quién. Un indicador que no se puede abrir
+ * no ayuda a decidir nada.
+ *
+ * La prueba se queda en el borde de la interfaz —lo que el widget entrega— y
+ * no renderiza componentes: eso es otra conversación. Lo que cubre es que el
+ * dato calculado exista del lado de la pantalla, que es donde se cortaba.
+ */
+describe('El indicador entrega su composición', () => {
+  it('trae una línea por presupuesto, además del número', async () => {
+    const scope = await nuevoVendedor('composicion');
+    const customerId = await nuevoCliente(scope, 'composicion');
+
+    await presupuestoAbierto(scope, customerId, 10_000);
+    await presupuestoAbierto(scope, customerId, 20_000);
+
+    const widget = await widgetDePresupuestos(scope);
+
+    assert.ok(widget.metric, 'el número');
+    assert.equal(widget.lines?.length, 2, 'y la lista que lo compone');
+
+    // Cada línea dice de quién es y en qué estado está: sin eso es un importe
+    // repetido, no una lista de decisiones pendientes.
+    for (const linea of widget.lines ?? []) {
+      assert.match(linea.primary, /P-\d{4}-\d{4}/, 'el número del presupuesto');
+      assert.match(linea.secondary, /borrador/, 'y qué hay que hacer con él');
+    }
+  });
+
+  it('declara el truncamiento con el mismo mecanismo que los seguimientos', async () => {
+    const scope = await nuevoVendedor('composicion-truncada');
+    const customerId = await nuevoCliente(scope, 'composicion-truncada');
+
+    for (let i = 0; i < LISTA_MAXIMA + 2; i += 1) {
+      await presupuestoAbierto(scope, customerId, 10_000);
+    }
+
+    const widget = await widgetDePresupuestos(scope);
+
+    assert.equal(widget.lines?.length, LISTA_MAXIMA);
+    assert.equal(widget.truncatedCount, 2, 'los dos que no entran en la lista');
+  });
+});
+
 describe('Comprometido en presupuestos abiertos', () => {
   /**
    * La prueba del cable.

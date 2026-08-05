@@ -578,6 +578,34 @@ export async function openQuoteTotals(
 }
 
 /**
+ * Cuántos presupuestos hay, sin contar los archivados.
+ *
+ * `ownerId` acota la vista y no el permiso, igual que en `openQuoteTotals`.
+ * Existe para que una lista truncada pueda decir cuántos quedaron afuera: sin
+ * el total, la pantalla no tiene forma de distinguir "estos son todos" de
+ * "estos son los primeros seis".
+ */
+export async function countQuotes(
+  scope: Scope,
+  view: { readonly ownerId?: string } = {},
+): Promise<number> {
+  scope.actor.assertCanActOn('quote', 'read');
+
+  const [fila] = await scope.db
+    .select({ total: count() })
+    .from(quotes)
+    .innerJoin(entities, eq(entities.id, quotes.entityId))
+    .where(
+      and(
+        isNull(entities.archivedAt),
+        ...(view.ownerId ? [eq(quotes.ownerId, view.ownerId)] : []),
+      ),
+    );
+
+  return Number(fila?.total ?? 0);
+}
+
+/**
  * Cuántos presupuestos esperan respuesta del cliente.
  *
  * El conteo completo, sin límite. Existe porque la pantalla lista unos pocos y

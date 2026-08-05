@@ -17,6 +17,7 @@ import { ROLES, type RoleId } from '@nci/domain';
 import { formatRelativeTime, metric, type Metric } from '@nci/design';
 import {
   countAwaitingResponse,
+  countQuotes,
   formatMoney,
   openQuoteTotals,
   type OpenQuoteTotals,
@@ -65,7 +66,7 @@ const REGISTRY: Record<string, WidgetLoader> = {
     // Dos consultas con propósitos distintos. La lista muestra lo último que
     // se tocó y está truncada a propósito; el indicador tiene que hablar del
     // conjunto entero, así que se agrega en la base y no sobre estas filas.
-    const [rows, abiertos] = await Promise.all([
+    const [rows, abiertos, propios] = await Promise.all([
       scope.db
         .select({
           number: quotes.number,
@@ -83,11 +84,13 @@ const REGISTRY: Record<string, WidgetLoader> = {
         .orderBy(desc(entities.updatedAt))
         .limit(LISTA_MAXIMA),
       openQuoteTotals(scope, { ownerId: scope.actor.id }),
+      countQuotes(scope, { ownerId: scope.actor.id }),
     ]);
 
     return {
       id: 'sales.my_quotes',
       title: 'Tus presupuestos',
+      truncatedCount: Math.max(0, propios - rows.length),
       // El importe solo no dice nada: lo que importa es cuánto de eso todavía
       // depende de una acción tuya y cuánto de una respuesta del cliente.
       ...(abiertos.length > 0 ? { metric: comprometido(abiertos) } : {}),

@@ -20,6 +20,20 @@ const separador = argumentos.indexOf('--');
 const patron = argumentos[0];
 const opcionesDeNode = separador === -1 ? [] : argumentos.slice(separador + 1);
 
+/**
+ * Un tsconfig propio para las pruebas, cuando el del paquete no sirve.
+ *
+ * Lo necesita apps/web: Next exige `jsx: "preserve"` en su tsconfig y lo
+ * reescribe si alguien lo cambia, pero el JSX preservado no lo entiende Node.
+ * Se pasa por variable de entorno porque definirla en el guion de npm no es
+ * portable entre Windows y el resto.
+ */
+const tsconfig = argumentos.indexOf('--tsconfig');
+const entorno =
+  tsconfig === -1
+    ? process.env
+    : { ...process.env, TSX_TSCONFIG_PATH: argumentos[tsconfig + 1] };
+
 if (!patron) {
   console.error('Falta el patrón de archivos.\n\n  node scripts/correr.mjs "src/**/*.test.ts"');
   process.exit(1);
@@ -48,7 +62,7 @@ if (archivos.length === 0) {
 const proceso = spawnSync(
   process.execPath,
   [...opcionesDeNode, '--test', ...archivos],
-  { stdio: 'inherit' },
+  { stdio: 'inherit', env: entorno },
 );
 
 process.exitCode = proceso.status ?? 1;

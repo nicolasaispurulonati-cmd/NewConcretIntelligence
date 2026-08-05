@@ -9,7 +9,7 @@
 
 import Link from 'next/link';
 
-import { MetricWidget } from '@/components/widget';
+import { Widget } from '@/components/widget';
 import { Notice } from '@/components/notice';
 import { getScope } from '@/lib/session';
 import { loadWorkspace } from '@/lib/workspace';
@@ -41,41 +41,9 @@ export default async function WorkspacePage(): Promise<React.ReactElement> {
 
       <section className="section">
         <div className="widgets">
-          {widgets.map((widget) => {
-            if (widget.metric) {
-              return <MetricWidget key={widget.id} metric={widget.metric} />;
-            }
-
-            return (
-              <article key={widget.id} className="widget">
-                <p className="widget__label">{widget.title}</p>
-                {widget.lines && widget.lines.length > 0 ? (
-                  <ul className="widget__context" style={{ borderTop: 'none', paddingTop: 0 }}>
-                    {widget.lines.map((line, index) => (
-                      <li key={`${widget.id}-${index}`} style={{ flexDirection: 'column', gap: 0 }}>
-                        <span style={{ color: 'var(--nci-text)' }}>{line.primary}</span>
-                        <span style={{ fontSize: 'var(--nci-text-xs)' }}>{line.secondary}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="widget__asof">{widget.emptyMessage}</p>
-                )}
-
-                {/*
-                  Una lista truncada que no lo dice es indistinguible de una
-                  completa, y quien la mira decide con el total que se imagina.
-                */}
-                {widget.truncatedCount !== undefined && widget.truncatedCount > 0 && (
-                  <p className="widget__asof">
-                    {widget.truncatedCount === 1
-                      ? 'Hay 1 más que no entra en esta lista.'
-                      : `Hay ${widget.truncatedCount} más que no entran en esta lista.`}
-                  </p>
-                )}
-              </article>
-            );
-          })}
+          {widgets.map((widget) => (
+            <Widget key={widget.id} widget={widget} />
+          ))}
         </div>
       </section>
 
