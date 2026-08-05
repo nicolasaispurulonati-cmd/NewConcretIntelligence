@@ -32,6 +32,15 @@ export interface LineInput {
   readonly discountPercent: number;
   /** 0 a 100. En Argentina normalmente 21, a veces 10,5. */
   readonly taxRate: number;
+  /**
+   * La moneda no es del renglón: es del presupuesto entero. Ver D-003.
+   *
+   * Está declarada como `never` a propósito, y no simplemente omitida: así el
+   * intento de asignarla no compila en lugar de compilar y ser ignorado.
+   * Sumar renglones de monedas distintas exigiría un tipo de cambio con su
+   * fecha, y NCI no es dueño de la conversión.
+   */
+  readonly currency?: never;
 }
 
 export interface LineAmounts {

@@ -43,6 +43,14 @@ export interface QuoteItemInput {
   readonly unitPrice: Cents;
   readonly discountPercent?: number;
   readonly taxRate?: number;
+  /**
+   * La moneda es del presupuesto, no del renglón. Ver D-003.
+   *
+   * Declarada como `never` para que asignarla sea un error de compilación y
+   * no un campo que se acepta y se descarta en silencio. La moneda se elige
+   * al crear el presupuesto, en `CreateQuoteInput`.
+   */
+  readonly currency?: never;
 }
 
 export interface QuoteLine extends QuoteItemInput {
