@@ -31,15 +31,23 @@ import {
 import { ROLES } from '@nci/domain';
 import { addQuoteItem, createQuote } from '@nci/sales';
 
-import { loadWorkspace } from './workspace.js';
+import { LISTA_MAXIMA, loadWorkspace } from './workspace.js';
 
 /**
- * Cuántos presupuestos abiertos crea la primera prueba.
+ * Cuántos presupuestos abiertos crea la prueba del seam.
  *
- * El widget lista seis. Ocho no entran, que es exactamente la condición bajo
- * la cual el cálculo anterior empezaba a mentir sin ninguna señal.
+ * Se deriva del límite de la lista y no es un número escrito a mano. Si mañana
+ * la lista muestra diez y acá quedara un ocho fijo, el escenario dejaría de
+ * distinguir entre las dos fuentes posibles del indicador y la prueba seguiría
+ * en verde sin probar nada. La discriminación tiene que sobrevivir a que ese
+ * límite cambie.
  */
-const ABIERTOS = 8;
+const ABIERTOS = LISTA_MAXIMA + 2;
+
+/** El importe de los que quedan fuera de la ventana visible. */
+const FUERA_DE_LA_LISTA = 777_00;
+/** El importe de los que sí se listan. */
+const EN_LA_LISTA = 10_000;
 
 let db: Database | undefined;
 
@@ -135,30 +143,51 @@ async function widgetDePresupuestos(scope: Scope) {
 }
 
 describe('Comprometido en presupuestos abiertos', () => {
-  it('cuenta el conjunto completo y no las filas que muestra la lista', async () => {
+  /**
+   * La prueba del cable.
+   *
+   * El defecto original nunca fue el cálculo: fue de dónde tomaba los datos.
+   * Por eso no alcanza con verificar que el número sea correcto — hay que
+   * construir un escenario en el que las dos fuentes posibles den resultados
+   * distintos, y comprobar que el que llega a la interfaz es el de la base.
+   *
+   * Los dos presupuestos más viejos quedan fuera de la ventana que se lista y
+   * llevan un importe distinto. Si el indicador se alimentara de las filas
+   * visibles, ese importe no aparecería en el total.
+   */
+  it('el indicador se alimenta del agregado y no de las filas que muestra', async () => {
     const scope = await nuevoVendedor('conjunto');
     const customerId = await nuevoCliente(scope, 'conjunto');
 
-    for (let i = 0; i < ABIERTOS; i += 1) {
-      await presupuestoAbierto(scope, customerId, 10_000);
+    // Primero los que van a quedar fuera: la lista ordena por más reciente.
+    await presupuestoAbierto(scope, customerId, FUERA_DE_LA_LISTA);
+    await presupuestoAbierto(scope, customerId, FUERA_DE_LA_LISTA);
+
+    for (let i = 0; i < LISTA_MAXIMA; i += 1) {
+      await presupuestoAbierto(scope, customerId, EN_LA_LISTA);
     }
 
     const widget = await widgetDePresupuestos(scope);
 
     assert.ok(widget.metric, 'con presupuestos abiertos tiene que haber indicador');
+    assert.equal(widget.lines?.length, LISTA_MAXIMA, 'la lista muestra su límite y nada más');
 
-    // 10.000 más 21 % de IVA son 12.100 por presupuesto. Ocho dan 96.800.
-    // Seis darían 72.600, que es lo que mostraba antes.
-    assert.match(
+    const conIva = (centavos: number) => Math.round(centavos * 1.21);
+    const todos = 2 * conIva(FUERA_DE_LA_LISTA) + LISTA_MAXIMA * conIva(EN_LA_LISTA);
+    const soloLosVisibles = LISTA_MAXIMA * conIva(EN_LA_LISTA);
+
+    const importe = (centavos: number) =>
+      new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(centavos / 100);
+
+    assert.equal(widget.metric.value, importe(todos), 'el valor tiene que ser el del conjunto');
+    assert.notEqual(
       widget.metric.value,
-      /968,00/,
-      'el importe tiene que salir de los ocho, no de los seis que se listan',
+      importe(soloLosVisibles),
+      'y no puede coincidir con el que darían las filas visibles: ahí está el cable',
     );
 
     const sinEnviar = widget.metric.context.find((c) => c.label === 'Sin enviar');
     assert.equal(sinEnviar?.value, String(ABIERTOS), 'el conteo también sale del conjunto completo');
-
-    assert.equal(widget.lines?.length, 6, 'la lista sigue mostrando seis, que es su límite');
   });
 
   it('con más de una moneda las muestra por separado y lo dice en el rótulo', async () => {

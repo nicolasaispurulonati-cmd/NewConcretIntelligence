@@ -34,7 +34,7 @@ type WidgetLoader = (scope: Scope) => Promise<WidgetRenderable | null>;
  * Es un límite de presentación y nada más. Ningún indicador puede calcularse
  * sobre estas filas: el agregado se pide aparte, sobre el conjunto completo.
  */
-const LISTA_MAXIMA = 6;
+export const LISTA_MAXIMA = 6;
 
 const REGISTRY: Record<string, WidgetLoader> = {
   /**
