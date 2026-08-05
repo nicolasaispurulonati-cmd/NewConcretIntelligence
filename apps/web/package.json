@@ -6,7 +6,8 @@
     "dev": "next dev --port 3000",
     "build": "tsc -b ../.. && next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:integracion": "node --import tsx --conditions=react-server --test --test-concurrency=1 \"src/**/*.integration.test.ts\""
   },
   "dependencies": {
     "@nci/ai": "*",
