@@ -16,8 +16,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "set-password": "node --import tsx src/scripts/set-password.ts",
-    "test": "node --import tsx --test \"src/**/!(*.integration).test.ts\"",
-    "test:integracion": "node --import tsx --test --test-concurrency=1 \"src/**/*.integration.test.ts\""
+    "test": "node ../../scripts/correr.mjs \"src/**/!(*.integration).test.ts\" -- --import tsx",
+    "test:integracion": "node ../../scripts/correr.mjs \"src/**/*.integration.test.ts\" -- --import tsx --test-concurrency=1"
   },
   "dependencies": {
     "@nci/db": "*",

@@ -7,7 +7,8 @@
     "build": "tsc -b ../.. && next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test:integracion": "node --import tsx --conditions=react-server --test --test-concurrency=1 \"src/**/*.integration.test.ts\""
+    "test:integracion": "node ../../scripts/correr.mjs \"src/**/*.integration.test.ts\" -- --import tsx --conditions=react-server --test-concurrency=1",
+    "test": "node ../../scripts/correr.mjs \"src/**/!(*.integration).test.ts\" -- --import tsx --conditions=react-server"
   },
   "dependencies": {
     "@nci/ai": "*",

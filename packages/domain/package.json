@@ -15,7 +15,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --import tsx --test \"src/**/!(*.integration).test.ts\""
+    "test": "node ../../scripts/correr.mjs \"src/**/!(*.integration).test.ts\" -- --import tsx"
   },
   "dependencies": {
     "zod": "^3.24.1"

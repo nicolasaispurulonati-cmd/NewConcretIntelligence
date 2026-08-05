@@ -27,7 +27,14 @@ const raiz = join(dirname(fileURLToPath(import.meta.url)), '..');
  */
 const GUION = process.argv[2] ?? 'test';
 
-/** Los paquetes que declaran ese guion, en orden estable. */
+/**
+ * Todos los paquetes del monorepo, declaren o no el guion.
+ *
+ * Se enumeran todos a propósito. Antes se filtraban los que lo declaraban, y
+ * un paquete sin guion simplemente no aparecía: apps/web estuvo fuera de la
+ * corrida sin que nada se pusiera rojo. El silencio es el problema, no la
+ * ausencia.
+ */
 function paquetes() {
   return ['packages', 'apps']
     .filter((grupo) => existsSync(join(raiz, grupo)))
@@ -38,10 +45,18 @@ function paquetes() {
     )
     .map((ruta) => {
       const manifiesto = JSON.parse(readFileSync(join(raiz, ruta, 'package.json'), 'utf8'));
-      return { ruta, nombre: manifiesto.name, corre: Boolean(manifiesto.scripts?.[GUION]) };
-    })
-    .filter((paquete) => paquete.corre);
+      return { ruta, nombre: manifiesto.name, declara: Boolean(manifiesto.scripts?.[GUION]) };
+    });
 }
+
+/**
+ * Si el guion es obligatorio en todos los paquetes.
+ *
+ * Las unitarias sí: no hay paquete que no tenga nada que probar sin base de
+ * datos. Las de integración no: @nci/domain no toca la base y exigirle una
+ * batería contra PostgreSQL sería pedir una prueba que no significa nada.
+ */
+const OBLIGATORIO = GUION === 'test';
 
 /**
  * Lee el resumen que imprime el corredor de pruebas de Node.
@@ -68,7 +83,20 @@ const total = { tests: 0, pass: 0, fail: 0, skipped: 0, todo: 0 };
 const problemas = [];
 const filas = [];
 
-for (const paquete of paquetes()) {
+const todos = paquetes();
+const esperados = OBLIGATORIO ? todos : todos.filter((paquete) => paquete.declara);
+let informaron = 0;
+
+for (const paquete of todos) {
+  if (!paquete.declara) {
+    if (OBLIGATORIO) {
+      problemas.push(
+        `${paquete.nombre}: no declara el guion "${GUION}". Un paquete sin pruebas tiene que decirlo, no desaparecer de la corrida.`,
+      );
+    }
+    continue;
+  }
+
   // Un solo comando en vez de comando más argumentos: en Windows npm es un
   // `.cmd` y Node no lo lanza sin shell, y con shell avisa que los argumentos
   // se concatenan sin escapar. Los nombres salen de los package.json del
@@ -96,6 +124,7 @@ for (const paquete of paquetes()) {
 
   for (const clave of Object.keys(total)) total[clave] += contadores[clave];
   filas.push({ paquete: paquete.nombre, ...contadores });
+  informaron += 1;
 
   if (proceso.status !== 0) {
     problemas.push(`${paquete.nombre}: terminó con código ${proceso.status}.`);
@@ -113,6 +142,18 @@ for (const paquete of paquetes()) {
 
 console.log('\n─────────────────────────────────────────────');
 console.table(filas);
+
+// El conteo que cierra el patrón que se repitió tres veces: si alguien agrega
+// un paquete y se olvida de las pruebas, es rojo el mismo día y no el día que
+// alguien se dé cuenta de que ese paquete nunca aparecía.
+if (informaron !== esperados.length) {
+  problemas.push(
+    `Informaron ${informaron} paquetes de los ${esperados.length} que tiene el monorepo. Falta: ${esperados
+      .filter((paquete) => !filas.some((fila) => fila.paquete === paquete.nombre))
+      .map((paquete) => paquete.nombre)
+      .join(', ')}.`,
+  );
+}
 
 if (total.skipped > 0) {
   problemas.push(

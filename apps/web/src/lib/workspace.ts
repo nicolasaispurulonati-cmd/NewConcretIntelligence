@@ -247,7 +247,7 @@ export async function loadWorkspace(scope: Scope): Promise<WorkspaceLayout> {
  * rótulo lo aclara. No se suman ni se convierten: sin tipo de cambio, un único
  * número sería una cifra inventada con apariencia de total. Ver D-003.
  */
-function comprometido(abiertos: readonly OpenQuoteTotals[]): Metric {
+export function comprometido(abiertos: readonly OpenQuoteTotals[]): Metric {
   const importes = abiertos.map((fila) => formatMoney(fila.total, fila.currency));
   const borradores = abiertos.reduce((total, fila) => total + fila.drafts, 0);
   const esperando = abiertos.reduce((total, fila) => total + fila.awaiting, 0);
