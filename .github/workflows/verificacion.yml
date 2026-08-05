@@ -88,7 +88,9 @@ jobs:
       # pone docker-compose.yml con `command`; los contenedores de servicio de
       # Actions no admiten esa clave, así que acá se declara por base.
       - name: Declarar la base como de pruebas
-        run: psql "$DATABASE_URL" -c "ALTER DATABASE postgres SET nci.entorno = 'pruebas'"
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL" -c "ALTER DATABASE postgres SET nci.entorno = 'pruebas'"
 
       # Contra el mismo PostgreSQL 17 con pgvector que usa producción. El
       # comando verifica motor, versión, pgvector, el marcador y que no haya
