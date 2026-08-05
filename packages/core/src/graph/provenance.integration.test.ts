@@ -15,7 +15,7 @@ import { after, before, describe, it } from 'node:test';
 
 import { inArray, sql } from 'drizzle-orm';
 
-import { createDatabase, entities, loadEnv, users, type Database } from '@nci/db';
+import { createDatabase, entities, requireDatabaseUrl, users, type Database } from '@nci/db';
 
 import { Actor, resolveCapabilities } from '../authorization/actor.js';
 import type { Scope } from '../authorization/resolve.js';
@@ -24,7 +24,6 @@ import { relate } from './relations.js';
 
 let db: Database | undefined;
 let scope: Scope;
-let disponible = false;
 
 const marca = Date.now().toString(36);
 const creado: string[] = [];
@@ -34,21 +33,15 @@ let productoId = '';
 let documentoId = '';
 
 before(async () => {
-  loadEnv();
-  const url = process.env['DATABASE_URL'];
-  if (!url) return;
-
-  try {
-    db = createDatabase({ url, max: 1 });
-    await db.execute('select 1');
-  } catch {
-    return;
-  }
+  // Sin try/catch a propósito: si la base no está, esto falla y las pruebas se
+  // ponen rojas. Saltearse sola convertiría la ausencia del entorno en verde.
+  db = createDatabase({ url: requireDatabaseUrl(), max: 1 });
+  await db.execute('select 1');
 
   const [usuario] = await db.select({ id: users.id }).from(users).limit(1);
-  if (!usuario) return;
-
-  disponible = true;
+  if (!usuario) {
+    throw new Error('La base no tiene usuarios. Sembrala con: npm run db:seed');
+  }
 
   scope = {
     db,
@@ -131,9 +124,7 @@ async function rechazo(consulta: ReturnType<typeof sql>): Promise<string | null>
 }
 
 describe('La base rechaza una procedencia inventada', () => {
-  it('en un nodo', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('en un nodo', async () => {
     const motivo = await rechazo(
       sql`update entities set source = 'importado' where id = ${productoId}`,
     );
@@ -142,9 +133,7 @@ describe('La base rechaza una procedencia inventada', () => {
     assert.match(motivo, /entities_source_valid/);
   });
 
-  it('en una arista', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('en una arista', async () => {
     const motivo = await rechazo(
       sql`update entity_relations set source = 'importado' where from_id = ${documentoId}`,
     );
@@ -153,9 +142,7 @@ describe('La base rechaza una procedencia inventada', () => {
     assert.match(motivo, /entity_relations_source_valid/);
   });
 
-  it('el vocabulario es el mismo para los dos', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('el vocabulario es el mismo para los dos', async () => {
     // Consistencia entre nodo y arista: si algún día divergen, esto lo dice.
     const filas = await db!.execute<{ conname: string; consrc: string }>(sql`
       select conname, pg_get_constraintdef(oid) as consrc
@@ -173,9 +160,7 @@ describe('La base rechaza una procedencia inventada', () => {
 });
 
 describe('La base rechaza una certeza fuera de rango', () => {
-  it('en un nodo, por encima de 1', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('en un nodo, por encima de 1', async () => {
     const motivo = await rechazo(
       sql`update entities set confidence = 1.5 where id = ${productoId}`,
     );
@@ -184,9 +169,7 @@ describe('La base rechaza una certeza fuera de rango', () => {
     assert.match(motivo, /entities_confidence_valid/);
   });
 
-  it('en un nodo, por debajo de 0', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('en un nodo, por debajo de 0', async () => {
     const motivo = await rechazo(
       sql`update entities set confidence = -0.1 where id = ${productoId}`,
     );
@@ -195,9 +178,7 @@ describe('La base rechaza una certeza fuera de rango', () => {
     assert.match(motivo, /entities_confidence_valid/);
   });
 
-  it('en una arista', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('en una arista', async () => {
     const motivo = await rechazo(
       sql`update entity_relations set confidence = 2 where from_id = ${documentoId}`,
     );
@@ -206,9 +187,7 @@ describe('La base rechaza una certeza fuera de rango', () => {
     assert.match(motivo, /entity_relations_confidence_valid/);
   });
 
-  it('ya no admite texto donde iba un número', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('ya no admite texto donde iba un número', async () => {
     // El motivo del cambio de tipo: como texto, esto entraba sin quejarse.
     const motivo = await rechazo(
       sql`update entities set confidence = 'alta' where id = ${productoId}`,
@@ -219,9 +198,7 @@ describe('La base rechaza una certeza fuera de rango', () => {
 });
 
 describe('Lo válido sigue entrando', () => {
-  it('un nodo inferido con su certeza', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('un nodo inferido con su certeza', async () => {
     const inferido = await createEntity(scope, {
       type: 'product',
       slug: `producto-inferido-${marca}`,
@@ -236,9 +213,7 @@ describe('Lo válido sigue entrando', () => {
     assert.equal(inferido.confidence, 0.8);
   });
 
-  it('un nodo afirmado por una persona no lleva certeza', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('un nodo afirmado por una persona no lleva certeza', async () => {
     const afirmado = await createEntity(scope, {
       type: 'product',
       slug: `producto-afirmado-${marca}`,

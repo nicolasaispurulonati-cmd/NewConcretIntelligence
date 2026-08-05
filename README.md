@@ -47,27 +47,7 @@ Levanta PostgreSQL 17 con pgvector en Docker y espera a que acepte conexiones an
 | `npm run db:reset` | Detener y borrar los datos |
 | `npm run db:logs` | Ver la salida del servidor |
 
-#### Alternativa sin instalar nada
-
-```bash
-npm run db:embedded
-```
-
-PostgreSQL 18 compilado a WebAssembly, corriendo dentro del propio Node. No requiere Docker y guarda los datos en `.data/`. Sirve para trabajar, con dos límites que Docker no tiene:
-
-- **Atiende un cliente por vez.** Con la aplicación corriendo no se puede migrar: hay que detenerla, migrar, y volver a levantarla.
-- **Se cierra con Ctrl+C.** Si el proceso muere de golpe, el servidor queda con la conexión tomada. Si además el directorio quedó a medio escribir, hay que borrar `.data/` y volver a migrar.
-
-Si se usa esta alternativa, agregar al `.env`:
-
-```
-NCI_DB_POOL_MAX="1"
-NCI_DB_IDLE_TIMEOUT="1"
-```
-
-Con Docker esas dos líneas se borran: el pool aprovecha las conexiones en paralelo, que es justamente lo que permite migrar sin detener la aplicación.
-
-Las dos escuchan en el puerto 5432, así que sólo puede estar una a la vez.
+Hubo una alternativa embebida en WebAssembly que no requería Docker. Se retiró: corría PostgreSQL 18 mientras producción usa la 17, y devolvía resultados incorrectos bajo carga. El motivo completo está en [D-010](docs/10-decisiones.md).
 
 #### Producción
 
@@ -117,17 +97,28 @@ Queda en `http://localhost:3000`.
 
 Los principios de producto están escritos como pruebas. Si un cambio viola uno, el build falla, y eso es correcto: se arregla el cambio, no la prueba.
 
+Son dos baterías con propósitos distintos.
+
 ```bash
 npm test
 ```
+
+Las unitarias. No necesitan base de datos, corren en paralelo y tardan segundos. Es lo que se corre mientras se trabaja.
+
+```bash
+npm run test:integracion
+```
+
+Las que tocan la base, contra PostgreSQL real. Verifica el motor antes de empezar: si no está levantado, si responde PGlite o si la versión no coincide con la de producción, la corrida **falla y explica cómo levantarlo**. No se degrada a otra cosa — la degradación silenciosa es lo que hizo que este proyecto validara durante semanas contra un motor que no era el suyo.
 
 ```bash
 npm run typecheck
 ```
 
-Las pruebas de integración de `@nci/sales` corren contra la base real y se saltan solas si no hay ninguna disponible, así que `npm test` sirve igual en una máquina recién clonada. Cuando corren, limpian lo que crearon.
+Dos cosas que conviene saber sobre el tablero:
 
-`npm run typecheck` compila los paquetes en el orden que impone el grafo de dependencias, no en el orden alfabético en que npm los recorre. Hay que correrlo antes que `npm test` en un clon limpio: las pruebas de cada paquete importan a los demás por su `dist`.
+- **`npm test` falla si hay pruebas salteadas.** Una prueba que no corre no dice nada, y un tablero que la cuenta como verde miente. El guardián está en [`scripts/pruebas.mjs`](scripts/pruebas.mjs) y también verifica que la aritmética del resumen cierre.
+- **`npm run typecheck` va antes que `npm test` en un clon limpio.** Compila los paquetes en el orden que impone el grafo de dependencias, y las pruebas de cada paquete importan a los demás por su `dist`.
 
 ## Despliegue
 

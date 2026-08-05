@@ -1,16 +1,16 @@
 /**
  * El ciclo de vida del presupuesto, contra una base real.
  *
- * Se salta solo si no hay base disponible: así `npm test` sigue sirviendo en
- * una máquina recién clonada, y las reglas se verifican de verdad cuando la
- * base está levantada.
+ * Corre con `npm run test:integracion`, que verifica el motor antes de empezar.
+ * Si la base no está, esto falla: antes se salteaba solo, y una prueba que se
+ * saltea sola convierte la ausencia del entorno en un tablero verde.
  */
 
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
 
 import { Actor, ValidationError, createEntity, resolveCapabilities, type Scope } from '@nci/core';
-import { createDatabase, customers, entities, loadEnv, users, type Database } from '@nci/db';
+import { createDatabase, customers, entities, requireDatabaseUrl, users, type Database } from '@nci/db';
 import { ROLES } from '@nci/domain';
 import { inArray } from 'drizzle-orm';
 
@@ -27,31 +27,19 @@ import {
 
 let db: Database | undefined;
 let scope: Scope;
-let disponible = false;
 
 /** Sufijo único para que dos corridas no choquen entre sí. */
 const marca = Date.now().toString(36);
 
 before(async () => {
-  loadEnv();
-  const url = process.env['DATABASE_URL'];
-  if (!url) return;
-
-  try {
-    db = createDatabase({ url, max: 1 });
-    await db.execute('select 1');
-    disponible = true;
-  } catch {
-    disponible = false;
-    return;
-  }
+  db = createDatabase({ url: requireDatabaseUrl(), max: 1 });
+  await db.execute('select 1');
 
   // Toda entidad registra quién la creó, así que el actor de prueba tiene que
   // ser un usuario real. Se toma el primero que exista en la base.
   const [existente] = await db.select({ id: users.id }).from(users).limit(1);
   if (!existente) {
-    disponible = false;
-    return;
+    throw new Error('La base no tiene usuarios. Sembrala con: npm run db:seed');
   }
 
   scope = {
@@ -100,9 +88,7 @@ function anotar<T extends { entity: { id: string } }>(quote: T): T {
 
 
 describe('Presupuesto: ciclo de vida', () => {
-  it('no se emite a un cliente sin condición de pago', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('no se emite a un cliente sin condición de pago', async () => {
     const sinCondicion = await crearTemporal(scope, {
       type: 'customer',
       slug: `cliente-sin-condicion-${marca}`,
@@ -124,9 +110,7 @@ describe('Presupuesto: ciclo de vida', () => {
     assert.equal(error.actions[0]?.label, 'Configurar condición de pago');
   });
 
-  it('recorre borrador → enviado → aceptado', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('recorre borrador → enviado → aceptado', async () => {
     const cliente = await crearTemporal(scope, {
       type: 'customer',
       slug: `constructora-${marca}`,
@@ -195,9 +179,7 @@ describe('Presupuesto: ciclo de vida', () => {
     assert.equal(presupuesto.status, 'aceptado');
   });
 
-  it('el rechazo exige un motivo', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('el rechazo exige un motivo', async () => {
     const cliente = await crearTemporal(scope, {
       type: 'customer',
       slug: `cliente-rechazo-${marca}`,
@@ -227,9 +209,7 @@ describe('Presupuesto: ciclo de vida', () => {
     assert.equal(rechazado.rejectionReason, 'Precio por encima del competidor');
   });
 
-  it('una versión nueva copia los renglones y no toca la anterior', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('una versión nueva copia los renglones y no toca la anterior', async () => {
     const cliente = await crearTemporal(scope, {
       type: 'customer',
       slug: `cliente-version-${marca}`,
@@ -261,9 +241,7 @@ describe('Presupuesto: ciclo de vida', () => {
     assert.equal(revisado.version, 1);
   });
 
-  it('un estado final no admite más transiciones', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('un estado final no admite más transiciones', async () => {
     const cliente = await crearTemporal(scope, {
       type: 'customer',
       slug: `cliente-final-${marca}`,
@@ -322,9 +300,7 @@ describe('Comprometido en presupuestos abiertos', () => {
     return cliente.id;
   }
 
-  it('cuenta todos los presupuestos abiertos, no sólo los que entran en la lista', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('cuenta todos los presupuestos abiertos, no sólo los que entran en la lista', async () => {
     const antes = porMoneda(await openQuoteTotals(scope, { ownerId: scope.actor.id }));
     const customerId = await clienteDePrueba('conjunto');
 
@@ -351,9 +327,7 @@ describe('Comprometido en presupuestos abiertos', () => {
     );
   });
 
-  it('no suma monedas distintas', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('no suma monedas distintas', async () => {
     const antes = porMoneda(await openQuoteTotals(scope, { ownerId: scope.actor.id }));
     const customerId = await clienteDePrueba('monedas');
 
@@ -388,9 +362,7 @@ describe('Comprometido en presupuestos abiertos', () => {
 });
 
 describe('Permisos del perfil comercial', () => {
-  it('Comercial puede cotizar pero no tocar stock', (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('Comercial puede cotizar pero no tocar stock', () => {
     assert.ok(scope.actor.canActOn('quote', 'create'));
     assert.ok(scope.actor.canActOn('customer', 'update'));
     assert.equal(scope.actor.canActOn('stock', 'update'), false);

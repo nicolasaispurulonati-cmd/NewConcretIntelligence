@@ -78,8 +78,17 @@ jobs:
           NCI_ADMIN_EMAIL: verificacion@newconcret.local
           NCI_ADMIN_NAME: Verificación
 
-      - name: Pruebas
+      # Sin base de datos: si alguna necesitara una, es que está mal ubicada.
+      - name: Pruebas unitarias
         run: npm test
+        env:
+          DATABASE_URL: ''
+
+      # Contra el mismo PostgreSQL 17 con pgvector que usa producción. El
+      # comando verifica motor y versión antes de empezar, así que un servicio
+      # mal configurado falla acá y no se disfraza de pruebas en verde.
+      - name: Pruebas de integración
+        run: npm run test:integracion
 
       # Un build roto no lo detecta ninguna prueba, y es el que corre Vercel.
       - name: Build

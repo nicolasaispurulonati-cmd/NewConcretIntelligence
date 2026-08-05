@@ -15,7 +15,7 @@ import { after, before, describe, it } from 'node:test';
 
 import { inArray } from 'drizzle-orm';
 
-import { createDatabase, entities, loadEnv, users, type Database } from '@nci/db';
+import { createDatabase, entities, requireDatabaseUrl, users, type Database } from '@nci/db';
 import { ROLES } from '@nci/domain';
 
 import { Actor, resolveCapabilities } from '../authorization/actor.js';
@@ -25,7 +25,6 @@ import { relate } from './relations.js';
 import { getEntityUniverse } from './universe.js';
 
 let db: Database | undefined;
-let disponible = false;
 
 /** Quien prepara el escenario: necesita ver y relacionar de los dos lados. */
 let preparador: Scope;
@@ -36,21 +35,17 @@ const marca = Date.now().toString(36);
 const creado: string[] = [];
 
 before(async () => {
-  loadEnv();
-  const url = process.env['DATABASE_URL'];
-  if (!url) return;
-
-  try {
-    db = createDatabase({ url, max: 1 });
-    await db.execute('select 1');
-  } catch {
-    return;
-  }
+  // Sin try/catch a propósito. Si la base no está, este gancho falla y las
+  // pruebas se ponen rojas: una prueba de integración que se saltea sola
+  // convierte la ausencia del entorno en un tablero verde. El comando
+  // `npm run test:integracion` verifica el entorno antes de llegar acá.
+  db = createDatabase({ url: requireDatabaseUrl(), max: 1 });
+  await db.execute('select 1');
 
   const [usuario] = await db.select({ id: users.id }).from(users).limit(1);
-  if (!usuario) return;
-
-  disponible = true;
+  if (!usuario) {
+    throw new Error('La base no tiene usuarios. Sembrala con: npm run db:seed');
+  }
 
   preparador = {
     db,
@@ -89,9 +84,7 @@ async function crear(scope: Scope, entrada: Parameters<typeof createEntity>[1]) 
 }
 
 describe('restrictedCount refleja lo que el permiso oculta', () => {
-  it('cuenta los vecinos que la persona no puede ver, sin revelarlos', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('cuenta los vecinos que la persona no puede ver, sin revelarlos', async () => {
     // Un producto que Marketing sí puede ver.
     const producto = await crear(preparador, {
       type: 'product',
@@ -130,9 +123,7 @@ describe('restrictedCount refleja lo que el permiso oculta', () => {
     assert.equal(parcial.restrictedCount, 2, 'pero el sistema le informa que hay dos');
   });
 
-  it('no filtra nada sobre los elementos restringidos', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('no filtra nada sobre los elementos restringidos', async () => {
     const producto = await crear(preparador, {
       type: 'product',
       slug: `producto-secreto-${marca}`,
@@ -159,9 +150,7 @@ describe('restrictedCount refleja lo que el permiso oculta', () => {
     assert.ok(!serializado.includes(venta.id), 'ni su identificador');
   });
 
-  it('un producto sin vecinos ocultos informa cero', async (t) => {
-    if (!disponible) return t.skip('sin base de datos disponible');
-
+  it('un producto sin vecinos ocultos informa cero', async () => {
     const producto = await crear(preparador, {
       type: 'product',
       slug: `producto-abierto-${marca}`,

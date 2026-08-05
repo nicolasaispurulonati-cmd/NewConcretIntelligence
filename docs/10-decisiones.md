@@ -159,6 +159,30 @@ Sobre el tipo de `confidence`, se descartaron dos:
 
 ---
 
+## D-010 · Se retira la base embebida; la integración corre contra PostgreSQL real
+
+**Fecha:** 2026-08-05 · **Estado:** vigente
+
+> D-009 corresponde al vocabulario de procedencia y se agrega junto con esa migración.
+
+**Decisión:** el proyecto deja de usar PGlite, la base PostgreSQL compilada a WebAssembly que servía como alternativa sin Docker. Las pruebas se separan en dos baterías: las unitarias no tocan la base y corren en cualquier máquina; las de integración corren contra PostgreSQL 17 con pgvector, la misma versión que producción, y **fallan** si ese motor no está disponible.
+
+**Motivo:** tres cosas, y la tercera es la que decide.
+
+1. **Corría otra versión.** PGlite es PostgreSQL 18.3; producción, CI y Docker usan la 17. Una prueba que corre contra otra versión valida otro sistema.
+2. **Devolvía resultados incorrectos bajo carga.** Contra restricciones verificadas a mano en la base, las mismas pruebas dieron 8/1 y 5/4 en corridas consecutivas, y aparecieron errores de protocolo del tipo "bind message supplies 2 parameters, but prepared statement requires 0". Contra PostgreSQL 17, las mismas pruebas dan 9/0 tres veces seguidas.
+3. **Era el mecanismo de una degradación silenciosa.** Escuchaba el mismo puerto con las mismas credenciales que la base de Docker — una decisión tomada para que cambiar de una a otra no obligara a editar el `.env`. El resultado fue que el mismo `DATABASE_URL` apuntaba a un motor o a otro según cuál estuviera levantado, sin ninguna señal. Ocurrió de verdad durante esta sesión: el tablero pasó de 125 en verde a 10 en rojo sin que cambiara una línea de código, porque el motor que respondía era otro.
+
+La alternativa descartada era conservarla para las pruebas que manejaba bien. No se sostiene: lo que hacía mal no era una función concreta sino la confiabilidad, y una base que a veces miente no sirve ni siquiera para lo que parece manejar.
+
+**Consecuencias:** habilita que un verde signifique algo, porque siempre se produjo contra el mismo motor que produce el rojo en producción. Cierra la posibilidad de correr integración sin Docker: es deliberado, y la corrida lo dice con un mensaje que explica cómo levantarlo. Cuesta que quien no tenga Docker sólo pueda correr las unitarias — 105 de las 125 — que es exactamente lo que puede validarse sin base.
+
+**Consecuencia medida:** con paralelismo y contra PGlite, la batería llegó a 3 pruebas salteadas y 1 fallo espurio sobre 50. Contra PostgreSQL 17, paralelo y secuencial dan lo mismo en diez corridas: 125 y ninguna salteada. La serialización que se había agregado en `@nci/core` no era el arreglo, era el síntoma.
+
+**Evidencia:** `scripts/integracion.mjs` verifica motor y versión antes de correr nada; `scripts/pruebas.mjs` falla si hay pruebas salteadas; `.github/workflows/verificacion.yml` corre las unitarias sin base y las de integración contra `pgvector/pgvector:pg17`.
+
+---
+
 ## Cómo se agrega una entrada
 
 Se numera con el siguiente `D-00N` disponible, se agrega al final, y no se toca ninguna de las anteriores salvo para marcarlas como supersedidas por la nueva.

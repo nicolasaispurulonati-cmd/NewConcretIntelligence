@@ -31,26 +31,41 @@ async function main(): Promise<void> {
     `;
 
     const major = Number(/PostgreSQL (\d+)/.exec(server?.version ?? '')?.[1] ?? 0);
-    const esEmbebida = /PGlite/i.test(server?.version ?? '');
 
     console.log(`\nConexión establecida con la base "${server?.current_database}".`);
-    console.log(`PostgreSQL ${major}${esEmbebida ? ' embebida (PGlite)' : ''}.`);
+    console.log(`PostgreSQL ${major}.`);
 
-    // El ajuste que acomoda los límites de la base embebida, dejado puesto
-    // sobre un servidor real, serializa todas las consultas y hace que la
-    // aplicación siga sin poder convivir con una migración. Es un residuo de
-    // configuración que produce exactamente el síntoma que se creía resuelto.
-    const poolMax = Number(process.env['NCI_DB_POOL_MAX']);
-    if (!esEmbebida && Number.isFinite(poolMax) && poolMax === 1) {
+    // La base embebida se retiró del proyecto: corría otra versión que la de
+    // producción y devolvía resultados incorrectos bajo carga. Si algo la
+    // levantó de nuevo, conviene decirlo acá antes de que alguien valide el
+    // sistema contra ella sin darse cuenta. Ver D-010.
+    if (/PGlite/i.test(server?.version ?? '')) {
       console.log(
         [
           '',
-          'Aviso: NCI_DB_POOL_MAX está en 1, pero esta base no es la embebida.',
+          'Aviso: la base que responde es PGlite, no PostgreSQL.',
           '',
-          'Ese valor existe sólo para acomodar el límite de PGlite, que atiende',
-          'un cliente por vez. Sobre un servidor real obliga a que todas las',
-          'consultas se hagan de a una, y la aplicación seguirá bloqueando las',
-          'migraciones aunque el servidor las admita.',
+          'El proyecto dejó de usarla. Corre una versión distinta de la de',
+          'producción y devolvió resultados incorrectos bajo carga.',
+          '',
+          'Levantá la de siempre con: npm run db:local',
+        ].join('\n'),
+      );
+    }
+
+    // Sobre un servidor real, un pool de 1 obliga a que todas las consultas se
+    // hagan de a una, y la aplicación vuelve a bloquear las migraciones aunque
+    // el servidor las admita. Es un residuo de configuración que produce
+    // exactamente el síntoma que se creía resuelto.
+    const poolMax = Number(process.env['NCI_DB_POOL_MAX']);
+    if (Number.isFinite(poolMax) && poolMax === 1) {
+      console.log(
+        [
+          '',
+          'Aviso: NCI_DB_POOL_MAX está en 1.',
+          '',
+          'Con una sola conexión, la aplicación no puede consultar en paralelo',
+          'y una migración la deja esperando.',
           '',
           'Quitá NCI_DB_POOL_MAX y NCI_DB_IDLE_TIMEOUT del .env.',
         ].join('\n'),
