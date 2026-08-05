@@ -125,6 +125,12 @@ Cada paso deja el sistema funcionando y verde.
 
 **Paso 2 — los tres sitios que filtran en memoria.** `getEntity`, `getEntityBySlug` y `loadEndpoint` pasan a filtrar en SQL. Es el paso que puede cambiar comportamiento observable y va solo, para que si algo se rompe se sepa qué lo rompió.
 
+> **Este paso no se da por cerrado sin cubrir [DT-004](12-deuda-conocida.md#dt-004--truncatedcount-se-calcula-sobre-un-conjunto-sin-filtrar-por-clasificación).**
+>
+> `getRelated` filtra por tipo y no por clasificación ([DT-003](12-deuda-conocida.md#dt-003--getrelated-filtra-por-tipo-pero-no-por-clasificación)), y `truncatedCount` se calcula sobre ese conjunto. Mientras siga así, **el número informa algo**: decir "hay 340 más que sí podés consultar" cuando doscientos están por encima del nivel de quien pregunta le revela que existen, que es exactamente lo que `restrictedCount` evita — por la puerta de al lado, y con el agravante de que el asistente lo declara por escrito en su respuesta.
+>
+> Al migrar `getRelated` al conjunto autorizado, hay que verificar que los dos conteos de `countRelationVisibility` queden calculados sobre el mismo criterio. Si uno filtra por clasificación y el otro no, la resta deja de significar lo que dice.
+
 **Paso 3 — los dominios.** `@nci/sales` y `apps/web` pasan a `nodes(scope)`. El filtro por dueño de `workspace.ts`, en el widget `sales.my_quotes` se reclasifica como argumento de vista, con la forma que ya usa `openQuoteTotals`.
 
 **Paso 4 — cerrar la puerta.** Se dejan de exportar las tablas del grafo desde `@nci/db` y se agrega la prueba de límites. A partir de acá el bypass no compila. Es el único paso irreversible en la práctica: volver atrás es reabrir el export.

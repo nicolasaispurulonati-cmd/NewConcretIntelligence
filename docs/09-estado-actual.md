@@ -16,6 +16,7 @@ No fue por descuido. **Un documento de estado mantenido a mano se desactualiza s
 | [`08-technical-architecture.md`](08-technical-architecture.md) | Por qué cada decisión técnica responde a un principio de producto: el grafo sobre PostgreSQL, el modelo de permisos, el contrato de la IA, la topología de la integración con Tango. |
 | [`10-decisiones.md`](10-decisiones.md) | El registro de decisiones de arquitectura y producto. Ninguna entrada se borra: si una se revierte, otra la supersede. Es lo más cercano a un documento vivo que hay acá, y lo es porque sólo crece. |
 | [`11-propuesta-acceso-entidades.md`](11-propuesta-acceso-entidades.md) | El diseño de la puerta única de acceso a entidades, con su inventario de sitios, su orden de migración y las decisiones que faltan. Propuesta, no implementación. |
+| [`12-deuda-conocida.md`](12-deuda-conocida.md) | Lo que sabemos que está mal, decidimos no arreglar todavía, y con qué condición se destraba. Una deuda registrada ahí deja de reportarse como hallazgo. |
 
 ## Cómo saber qué hay construido hoy
 
