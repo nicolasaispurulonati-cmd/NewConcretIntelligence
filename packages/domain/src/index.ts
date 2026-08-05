@@ -12,3 +12,4 @@ export * from './entity-types.js';
 export * from './capabilities.js';
 export * from './relations.js';
 export * from './roles.js';
+export * from './provenance.js';

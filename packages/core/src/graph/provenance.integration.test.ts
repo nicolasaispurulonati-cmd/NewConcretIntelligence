@@ -197,6 +197,99 @@ describe('La base rechaza una certeza fuera de rango', () => {
   });
 });
 
+describe('El origen externo va completo o no va', () => {
+  /** Las tres tablas que comparten el vocabulario. Ver D-009. */
+  const TABLAS = ['entities', 'entity_relations', 'activity'] as const;
+
+  it('el vocabulario es exactamente el mismo en las tres tablas', async () => {
+    const filas = await db!.execute<{ conname: string; consrc: string }>(sql`
+      select conname, pg_get_constraintdef(oid) as consrc
+      from pg_constraint
+      where conname in (
+        'entities_source_valid',
+        'entity_relations_source_valid',
+        'activity_source_valid'
+      )
+    `);
+
+    const definiciones = [...filas].map((fila) => String(fila.consrc));
+
+    assert.equal(definiciones.length, 3, 'las tres tienen que tener restricción');
+    assert.equal(new Set(definiciones).size, 1, 'y tienen que decir exactamente lo mismo');
+    assert.match(definiciones[0] ?? '', /integration/, 'con integration adentro');
+  });
+
+  it('una procedencia externa sin sistema de origen se rechaza', async () => {
+    const motivo = await rechazo(
+      sql`update entities set source = 'integration' where id = ${productoId}`,
+    );
+
+    assert.ok(motivo, 'sin decir de qué sistema vino, el dato no se puede mostrar con su origen');
+    assert.match(motivo, /entities_external_origin/);
+  });
+
+  it('una procedencia externa sin fecha de lectura se rechaza', async () => {
+    const motivo = await rechazo(
+      sql`update entities set source = 'integration', source_system = 'tango' where id = ${productoId}`,
+    );
+
+    // Sin la fecha no se puede mostrar que el dato envejeció, que es lo que
+    // D-001 exige para todo lo que NCI no es dueño.
+    assert.ok(motivo);
+    assert.match(motivo, /entities_external_origin/);
+  });
+
+  it('un dato que no vino de afuera no puede declarar sistema de origen', async () => {
+    const motivo = await rechazo(
+      sql`update entities set source_system = 'tango' where id = ${productoId}`,
+    );
+
+    assert.ok(motivo, 'un origen externo en un dato que nadie importó miente sobre su procedencia');
+    assert.match(motivo, /entities_external_origin/);
+  });
+
+  it('la misma regla rige en aristas y en actividad', async () => {
+    const enAristas = await rechazo(
+      sql`update entity_relations set source = 'integration' where from_id = ${documentoId}`,
+    );
+    assert.ok(enAristas);
+    assert.match(enAristas, /entity_relations_external_origin/);
+
+    const enActividad = await rechazo(
+      sql`update activity set source_system = 'tango' where entity_id = ${productoId}`,
+    );
+    assert.ok(enActividad);
+    assert.match(enActividad, /activity_external_origin/);
+  });
+
+  it('la actividad ya no admite una procedencia inventada', async () => {
+    // Antes de D-009 esta tabla no tenía ninguna restricción sobre `source`.
+    const motivo = await rechazo(
+      sql`update activity set source = 'importado' where entity_id = ${productoId}`,
+    );
+
+    assert.ok(motivo);
+    assert.match(motivo, /activity_source_valid/);
+  });
+
+  it('completa, la procedencia externa entra en las tres tablas', async () => {
+    for (const tabla of TABLAS) {
+      const columna = tabla === 'activity' ? sql`entity_id` : sql`id`;
+      const donde = tabla === 'entity_relations' ? sql`from_id` : columna;
+
+      const motivo = await rechazo(sql`
+        update ${sql.raw(tabla)}
+           set source = 'integration',
+               source_system = 'tango',
+               source_read_at = now()
+         where ${donde} = ${tabla === 'entity_relations' ? documentoId : productoId}
+      `);
+
+      assert.equal(motivo, null, `${tabla} rechazó una procedencia externa completa`);
+    }
+  });
+});
+
 describe('Lo válido sigue entrando', () => {
   it('un nodo inferido con su certeza', async () => {
     const inferido = await createEntity(scope, {
@@ -204,13 +297,32 @@ describe('Lo válido sigue entrando', () => {
       slug: `producto-inferido-${marca}`,
       displayName: `Producto inferido ${marca}`,
       status: 'activo',
-      source: 'ai',
+      provenance: { source: 'ai' },
       confidence: 0.8,
     });
     creado.push(inferido.id);
 
     assert.equal(inferido.source, 'ai');
     assert.equal(inferido.confidence, 0.8);
+    assert.equal(inferido.sourceSystem, null, 'la IA no es un sistema externo');
+  });
+
+  it('un nodo traído de una integración, con su sistema y su fecha', async () => {
+    const leidoEn = new Date('2026-08-05T10:00:00.000Z');
+
+    const importado = await createEntity(scope, {
+      type: 'product',
+      slug: `producto-importado-${marca}`,
+      displayName: `Producto importado ${marca}`,
+      status: 'activo',
+      provenance: { source: 'integration', sourceSystem: 'tango', sourceReadAt: leidoEn },
+    });
+    creado.push(importado.id);
+
+    assert.equal(importado.source, 'integration');
+    assert.equal(importado.sourceSystem, 'tango');
+    // La fecha de lectura es lo que permite mostrar que el dato envejeció.
+    assert.equal(importado.sourceReadAt?.toISOString(), leidoEn.toISOString());
   });
 
   it('un nodo afirmado por una persona no lleva certeza', async () => {

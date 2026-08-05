@@ -23,9 +23,41 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
+import { EXTERNAL_SOURCE, SOURCE_IDS } from '@nci/domain';
+
 import { users } from './identity.js';
+
+/**
+ * Las tres restricciones de procedencia, construidas desde el vocabulario de
+ * @nci/domain.
+ *
+ * Se generan en vez de escribirse a mano en cada tabla: es lo que garantiza
+ * que nodo, arista y actividad admitan exactamente lo mismo. Antes eran cuatro
+ * copias del literal, tres tablas con la lista y una sin restricción ninguna.
+ */
+function procedenciaValida(source: AnyPgColumn) {
+  const valores = SOURCE_IDS.map((id) => `'${id}'`).join(',');
+  return sql.raw(`${source.name} in (${valores})`);
+}
+
+/**
+ * Los dos campos externos van juntos, y sólo con procedencia externa.
+ *
+ * Obligatorios cuando el dato viene de afuera —sin la fecha de lectura no se
+ * puede mostrar que envejeció, que es lo que exige D-001— y prohibidos cuando
+ * no, porque un sistema de origen en un dato que nadie importó es una mentira
+ * silenciosa sobre de dónde salió.
+ */
+function origenExternoCoherente(source: AnyPgColumn, sistema: AnyPgColumn, leido: AnyPgColumn) {
+  return sql.raw(
+    `case when ${source.name} = '${EXTERNAL_SOURCE}'` +
+      ` then ${sistema.name} is not null and ${leido.name} is not null` +
+      ` else ${sistema.name} is null and ${leido.name} is null end`,
+  );
+}
 
 /** Columna `tsvector` de PostgreSQL, mantenida por trigger. */
 const tsvector = customType<{ data: string; driverData: string }>({
@@ -83,7 +115,7 @@ export const entities = pgTable(
     // se afirman de la misma manera, y quien lee el grafo no tiene que
     // aprender dos idiomas. Ver D-007.
     /**
-     * Quién afirmó que este nodo existe. 'user' | 'system' | 'ai'.
+     * Quién afirmó que este nodo existe. El vocabulario está en @nci/domain.
      *
      * Un nodo inferido —una máquina deducida del historial de ventas— tiene
      * que poder decir que fue inferido. Sin esto, la única forma de anotarlo
@@ -95,6 +127,10 @@ export const entities = pgTable(
      * una afirmación humana no lleva probabilidad, lleva responsable.
      */
     confidence: numeric('confidence', { precision: 3, scale: 2 }),
+    /** Qué integración lo trajo. Sólo con procedencia externa. */
+    sourceSystem: text('source_system'),
+    /** Cuándo se leyó del sistema de origen. Sólo con procedencia externa. */
+    sourceReadAt: timestamp('source_read_at', { withTimezone: true }),
 
     // ── Contenido ─────────────────────────────────────────────────────────
     data: jsonb('data').notNull().default({}),
@@ -130,7 +166,11 @@ export const entities = pgTable(
       'entities_classification_valid',
       sql`${table.classification} in ('public','internal','financial','restricted')`,
     ),
-    check('entities_source_valid', sql`${table.source} in ('user','system','ai')`),
+    check('entities_source_valid', procedenciaValida(table.source)),
+    check(
+      'entities_external_origin',
+      origenExternoCoherente(table.source, table.sourceSystem, table.sourceReadAt),
+    ),
     check(
       'entities_confidence_valid',
       sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`,
@@ -160,9 +200,13 @@ export const entityRelations = pgTable(
       .references(() => entities.id, { onDelete: 'cascade' }),
     /** Contexto de la arista: cantidad en un presupuesto, orden en una lista. */
     metadata: jsonb('metadata').notNull().default({}),
+    /** Qué integración la trajo. Sólo con procedencia externa. */
+    sourceSystem: text('source_system'),
+    /** Cuándo se leyó del sistema de origen. Sólo con procedencia externa. */
+    sourceReadAt: timestamp('source_read_at', { withTimezone: true }),
     /**
-     * Quién la creó. 'user' | 'system' | 'ai'. Una relación inferida por la IA
-     * se distingue siempre de una que afirmó una persona.
+     * Quién la creó. El vocabulario está en @nci/domain. Una relación inferida
+     * por la IA se distingue siempre de una que afirmó una persona.
      */
     source: text('source').notNull().default('user'),
     /**
@@ -181,7 +225,11 @@ export const entityRelations = pgTable(
     index('entity_relations_from_idx').on(table.fromId, table.type),
     index('entity_relations_to_idx').on(table.toId, table.type),
     check('entity_relations_no_self', sql`${table.fromId} <> ${table.toId}`),
-    check('entity_relations_source_valid', sql`${table.source} in ('user','system','ai')`),
+    check('entity_relations_source_valid', procedenciaValida(table.source)),
+    check(
+      'entity_relations_external_origin',
+      origenExternoCoherente(table.source, table.sourceSystem, table.sourceReadAt),
+    ),
     check(
       'entity_relations_confidence_valid',
       sql`${table.confidence} is null or (${table.confidence} >= 0 and ${table.confidence} <= 1)`,
@@ -209,8 +257,12 @@ export const activity = pgTable(
     summary: text('summary').notNull(),
     actorId: uuid('actor_id').references(() => users.id, { onDelete: 'set null' }),
     actorName: text('actor_name').notNull(),
-    /** 'user' | 'system' | 'ai' | 'integration'. */
+    /** El vocabulario está en @nci/domain, igual que en nodos y aristas. */
     source: text('source').notNull().default('user'),
+    /** Qué integración lo produjo. Sólo con procedencia externa. */
+    sourceSystem: text('source_system'),
+    /** Cuándo se leyó del sistema de origen. Sólo con procedencia externa. */
+    sourceReadAt: timestamp('source_read_at', { withTimezone: true }),
     /** Entidad secundaria involucrada: la orden de compra en una recepción. */
     relatedEntityId: uuid('related_entity_id').references(() => entities.id, {
       onDelete: 'set null',
@@ -222,6 +274,13 @@ export const activity = pgTable(
     index('activity_entity_idx').on(table.entityId, table.occurredAt),
     index('activity_actor_idx').on(table.actorId, table.occurredAt),
     index('activity_feed_idx').on(table.occurredAt),
+    // Esta tabla no tenía ninguna restricción sobre `source`: admitía cualquier
+    // palabra. Era la tercera forma distinta del mismo vocabulario.
+    check('activity_source_valid', procedenciaValida(table.source)),
+    check(
+      'activity_external_origin',
+      origenExternoCoherente(table.source, table.sourceSystem, table.sourceReadAt),
+    ),
   ],
 );
 

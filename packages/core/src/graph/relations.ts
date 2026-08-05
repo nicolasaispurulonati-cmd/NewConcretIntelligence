@@ -15,6 +15,7 @@ import {
   RELATION_TYPES,
   validateRelation,
   type EntityTypeId,
+  type Provenance,
   type RelationTypeId,
 } from '@nci/domain';
 
@@ -27,8 +28,13 @@ export interface RelateInput {
   readonly fromId: string;
   readonly toId: string;
   readonly metadata?: Record<string, unknown>;
-  /** Quién la afirma. Una relación inferida por la IA nunca se confunde con una humana. */
-  readonly source?: 'user' | 'system' | 'ai';
+  /**
+   * Quién la afirma. Una relación inferida nunca se confunde con una humana.
+   *
+   * El tipo obliga a que una arista de origen externo declare de qué sistema
+   * vino y cuándo se leyó.
+   */
+  readonly provenance?: Provenance;
   /** 0 a 1 cuando la infirió la IA. */
   readonly confidence?: number;
 }
@@ -53,6 +59,7 @@ export async function relate(scope: Scope, input: RelateInput): Promise<void> {
   scope.actor.assertCanActOn(to.type, 'update');
 
   const definition = RELATION_TYPES[input.type];
+  const procedencia: Provenance = input.provenance ?? { source: 'user' };
 
   await scope.db
     .insert(entityRelations)
@@ -61,7 +68,9 @@ export async function relate(scope: Scope, input: RelateInput): Promise<void> {
       fromId: input.fromId,
       toId: input.toId,
       metadata: input.metadata ?? {},
-      source: input.source ?? 'user',
+      source: procedencia.source,
+      sourceSystem: procedencia.sourceSystem ?? null,
+      sourceReadAt: procedencia.sourceReadAt ?? null,
       confidence: input.confidence !== undefined ? String(input.confidence) : null,
       createdBy: scope.actor.id,
     })
@@ -74,7 +83,8 @@ export async function relate(scope: Scope, input: RelateInput): Promise<void> {
     verb: 'relacionó',
     summary: `${scope.actor.fullName} relacionó "${from.displayName}" con "${to.displayName}" (${definition.label.toLowerCase()}).`,
     relatedEntityId: input.toId,
-    source: input.source === 'ai' ? 'ai' : 'user',
+    // El evento hereda la procedencia de la relación que lo produjo.
+    provenance: procedencia,
   });
   await recordAudit(scope, {
     action: 'relation.create',

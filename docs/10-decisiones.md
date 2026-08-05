@@ -159,11 +159,31 @@ Sobre el tipo de `confidence`, se descartaron dos:
 
 ---
 
-## D-010 · Se retira la base embebida; la integración corre contra PostgreSQL real
+## D-009 · Un solo vocabulario de procedencia, con `integration` adentro
 
 **Fecha:** 2026-08-05 · **Estado:** vigente
 
-> D-009 corresponde al vocabulario de procedencia y se agrega junto con esa migración.
+**Decisión:** el vocabulario de procedencia pasa a ser `user`, `system`, `ai` e `integration`, definido en un único lugar —`packages/domain/src/provenance.ts`— del que las tres tablas construyen su restricción. Un dato de procedencia externa está obligado a declarar de qué sistema vino y cuándo se leyó, y un dato que no es externo tiene prohibido declararlo.
+
+**Motivo:** resuelve la tensión que [D-007](#d-007--procedencia-en-los-nodos-con-el-vocabulario-de-las-aristas) dejó anotada sin resolver. Ahí se copió el vocabulario de las aristas a los nodos —`user`, `system`, `ai`— porque era lo que existía, y quedó registrado que `activity` admitía además un cuarto valor, `integration`, y que un nodo inferido por el puente de Tango no tendría cómo declararse.
+
+Una máquina deducida del historial de ventas de Tango no la infiere un usuario, ni la lógica interna, ni la IA: la trae un sistema externo. `system` sería inexacto, porque describiría a NCI afirmando algo por su cuenta.
+
+Los dos campos nuevos son lo que hace aplicable D-001 a los datos inferidos. Ese principio dice que NCI muestra el dato de Tango con su fecha y deja visible que envejeció; sin la fecha de lectura, no alcanzaba a nada que la plataforma hubiera deducido.
+
+La alternativa descartada era reutilizar `system` y guardar el origen en el `data` JSONB. Es lo que ya se había descartado en D-007 para la procedencia misma, por el mismo motivo: sin tipar ni validar, cada dominio inventa su clave.
+
+**Consecuencias:** habilita importar parque instalado desde Tango sin perder de vista de dónde salió ni cuándo. Cierra la posibilidad de marcar un dato como externo a medias. Cuesta que revertir sea destructivo: volver a tres valores obliga a reasignar a `system` toda fila `integration`, y con eso se pierde la distinción que la migración existía para crear.
+
+**Lo que había antes, y que esto corrige:** el mismo vocabulario estaba escrito de tres formas distintas. `entities` y `entity_relations` tenían cada una su copia del literal `('user','system','ai')`; `activity` no tenía **ninguna restricción** y admitía cualquier palabra; y los tipos de TypeScript lo repetían dos veces más, con listas que no coincidían entre sí.
+
+**Evidencia:** `packages/domain/src/provenance.ts` es la única fuente; `packages/db/src/schema/graph.ts` genera las seis restricciones desde ahí. Migración en `packages/db/migrations/0003_vocabulario_procedencia.sql`, con su reversión al lado. Pruebas en `packages/core/src/graph/provenance.integration.test.ts`, incluida una que verifica que las tres definiciones de la base sean idénticas entre sí.
+
+---
+
+## D-010 · Se retira la base embebida; la integración corre contra PostgreSQL real
+
+**Fecha:** 2026-08-05 · **Estado:** vigente
 
 **Decisión:** el proyecto deja de usar PGlite, la base PostgreSQL compilada a WebAssembly que servía como alternativa sin Docker. Las pruebas se separan en dos baterías: las unitarias no tocan la base y corren en cualquier máquina; las de integración corren contra PostgreSQL 17 con pgvector, la misma versión que producción, y **fallan** si ese motor no está disponible.
 

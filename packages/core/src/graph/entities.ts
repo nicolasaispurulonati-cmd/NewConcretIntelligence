@@ -10,7 +10,7 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 import { entities } from '@nci/db';
-import { ENTITY_TYPES, type EntityTypeId } from '@nci/domain';
+import { ENTITY_TYPES, type EntityTypeId, type Provenance, type SourceId } from '@nci/domain';
 
 import { recordActivity, recordAudit } from '../audit.js';
 import type { Scope } from '../authorization/resolve.js';
@@ -25,8 +25,12 @@ export interface EntityNode {
   readonly status: string | null;
   readonly classification: string;
   readonly ownerId: string | null;
-  /** Quién afirmó que este nodo existe. Ver D-007. */
-  readonly source: EntitySource;
+  /** Quién afirmó que este nodo existe. Ver D-007 y D-009. */
+  readonly source: SourceId;
+  /** Qué integración lo trajo. Sólo cuando la procedencia es externa. */
+  readonly sourceSystem: string | null;
+  /** Cuándo se leyó del sistema de origen. Sólo cuando es externa. */
+  readonly sourceReadAt: Date | null;
   /** Certeza de la inferencia, de 0 a 1. Nula cuando lo afirmó una persona. */
   readonly confidence: number | null;
   readonly data: Record<string, unknown>;
@@ -35,14 +39,6 @@ export interface EntityNode {
   readonly archivedAt: Date | null;
 }
 
-/**
- * Cómo entró un nodo al grafo.
- *
- * El mismo vocabulario que usan las aristas. Un dato inferido y uno afirmado
- * por una persona no valen lo mismo, y la diferencia tiene que poder leerse
- * sin abrir el `data`.
- */
-export type EntitySource = 'user' | 'system' | 'ai';
 
 export interface CreateEntityInput {
   readonly type: EntityTypeId;
@@ -52,9 +48,14 @@ export interface CreateEntityInput {
   readonly subtitle?: string;
   readonly status?: string;
   readonly ownerId?: string;
-  /** Por defecto 'user': si nadie dice lo contrario, lo afirmó una persona. */
-  readonly source?: EntitySource;
-  /** Sólo tiene sentido junto a un `source` que no sea 'user'. De 0 a 1. */
+  /**
+   * De dónde salió. Por defecto lo afirmó una persona.
+   *
+   * El tipo obliga a que un nodo de origen externo declare de qué sistema vino
+   * y cuándo se leyó: `integration` no se puede construir sin esos dos datos.
+   */
+  readonly provenance?: Provenance;
+  /** Certeza de la inferencia, de 0 a 1. No va con procedencia humana. */
   readonly confidence?: number;
   readonly data?: Record<string, unknown>;
   /**
@@ -78,6 +79,8 @@ export function slugify(value: string): string {
 export async function createEntity(scope: Scope, input: CreateEntityInput): Promise<EntityNode> {
   scope.actor.assertCanActOn(input.type, 'create');
 
+  const procedencia: Provenance = input.provenance ?? { source: 'user' };
+
   const definition = ENTITY_TYPES[input.type];
   const slug = input.slug ?? slugify(input.displayName);
 
@@ -99,7 +102,9 @@ export async function createEntity(scope: Scope, input: CreateEntityInput): Prom
       status: input.status ?? null,
       classification: definition.classification,
       ownerId: input.ownerId ?? scope.actor.id,
-      source: input.source ?? 'user',
+      source: procedencia.source,
+      sourceSystem: procedencia.sourceSystem ?? null,
+      sourceReadAt: procedencia.sourceReadAt ?? null,
       confidence: input.confidence !== undefined ? String(input.confidence) : null,
       data: input.data ?? {},
       searchableText: input.searchableText ?? input.displayName,
@@ -292,7 +297,9 @@ function toNode(row: EntityRow): EntityNode {
     status: row.status,
     classification: row.classification,
     ownerId: row.ownerId,
-    source: row.source as EntitySource,
+    source: row.source as SourceId,
+    sourceSystem: row.sourceSystem,
+    sourceReadAt: row.sourceReadAt,
     confidence: row.confidence === null ? null : Number(row.confidence),
     data: row.data as Record<string, unknown>,
     createdAt: row.createdAt,

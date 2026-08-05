@@ -11,7 +11,7 @@
  */
 
 import { activity, auditLog } from '@nci/db';
-import type { EntityTypeId } from '@nci/domain';
+import type { EntityTypeId, Provenance } from '@nci/domain';
 
 import type { Scope } from './authorization/resolve.js';
 
@@ -67,18 +67,30 @@ export interface ActivityEntry {
   /** La frase completa, ya redactada: "Se recibieron 40 unidades." */
   readonly summary: string;
   readonly relatedEntityId?: string;
-  readonly source?: 'user' | 'system' | 'ai' | 'integration';
   readonly payload?: Record<string, unknown>;
+  /**
+   * De dónde salió. Por defecto lo hizo una persona.
+   *
+   * El tipo obliga a que un evento de origen externo diga de qué sistema vino
+   * y cuándo se leyó: no se puede construir `integration` sin esos dos datos.
+   * La base lo verifica igual, porque un script de importación puede no pasar
+   * por acá.
+   */
+  readonly provenance?: Provenance;
 }
 
 export async function recordActivity(scope: Scope, entry: ActivityEntry): Promise<void> {
+  const procedencia = entry.provenance ?? { source: 'user' as const };
+
   await scope.db.insert(activity).values({
     entityId: entry.entityId,
     verb: entry.verb,
     summary: entry.summary,
     actorId: scope.actor.id,
     actorName: scope.actor.fullName,
-    source: entry.source ?? 'user',
+    source: procedencia.source,
+    sourceSystem: procedencia.sourceSystem ?? null,
+    sourceReadAt: procedencia.sourceReadAt ?? null,
     relatedEntityId: entry.relatedEntityId ?? null,
     payload: entry.payload ?? {},
   });
