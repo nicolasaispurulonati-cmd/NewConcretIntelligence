@@ -52,25 +52,38 @@ export interface EntityUniverse {
   readonly sections: readonly UniverseSection[];
   readonly timeline: readonly TimelineEvent[];
   /**
-   * Lo que existe alrededor de este nodo pero queda fuera del alcance de la
-   * persona. Se informa el número, nunca el contenido.
+   * Vecinos que existen y esta persona **no está autorizada** a ver. Se informa
+   * el número, nunca el contenido.
    *
    * El PDL exige que el usuario nunca se pierda: saber que hay información
    * relacionada que no puede ver es distinto de creer que no existe.
    */
   readonly restrictedCount: number;
+  /**
+   * Vecinos que esta persona **sí puede ver** y que no entraron en esta
+   * consulta por el límite.
+   *
+   * Va por separado de `restrictedCount` a propósito. Antes los dos se mezclaban
+   * en un solo número, y el resultado era peor que la suma de las partes: un
+   * nodo con más vecinos visibles que el límite mostraba una parte y declaraba
+   * que no había nada oculto. Las dos causas son distintas —una se resuelve
+   * pidiendo permiso, la otra ampliando la consulta— y cuando el alcance por
+   * fila entre en juego, confundirlas haría imposible saber cuál de las dos
+   * está actuando.
+   */
+  readonly truncatedCount: number;
 }
 
 export async function getEntityUniverse(
   scope: Scope,
   entityId: string,
-  options: { readonly timelineLimit?: number } = {},
+  options: { readonly timelineLimit?: number; readonly relatedLimit?: number } = {},
 ): Promise<EntityUniverse> {
   const entity = await getEntity(scope, entityId);
   const definition = ENTITY_TYPES[entity.type];
 
   const [related, events, visibility] = await Promise.all([
-    getRelated(scope, entityId),
+    getRelated(scope, entityId, options.relatedLimit ? { limit: options.relatedLimit } : {}),
     scope.db
       .select({
         id: activity.id,
@@ -96,7 +109,12 @@ export async function getEntityUniverse(
     },
     sections: groupByDomain(related),
     timeline: events,
+    // Dos restas sobre los mismos dos conteos, y cada una responde una pregunta
+    // distinta. `restrictedCount` compara el total contra lo que la autorización
+    // deja pasar; `truncatedCount` compara eso último contra lo que realmente se
+    // devolvió. Ninguna de las dos puede absorber a la otra.
     restrictedCount: Math.max(0, visibility.total - visibility.visible),
+    truncatedCount: Math.max(0, visibility.visible - related.length),
   };
 }
 

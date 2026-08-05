@@ -85,6 +85,25 @@ export default async function EntityPage({
           )}
 
           {/*
+            Dos avisos distintos, y por eso van separados. Uno se resuelve
+            pidiendo permiso; el otro, ampliando la consulta. Presentarlos como
+            una sola cifra dejaba al usuario sin saber cuál de las dos cosas le
+            estaba pasando — y en el caso peor, sin saber que le pasaba alguna.
+
+            De las tres situaciones posibles, la tercera —no hay más— no se
+            enuncia: la ausencia de estos dos avisos ya la comunica.
+          */}
+          {universe.truncatedCount > 0 && (
+            <p className="page__lede">
+              Se muestran los primeros {universe.sections.reduce((n, s) => n + s.nodes.length, 0)}.
+              Hay {universe.truncatedCount}{' '}
+              {universe.truncatedCount === 1 ? 'elemento más' : 'elementos más'} relacionados con{' '}
+              {entity.displayName} que sí podés consultar y no entraron en esta vista. Buscá por
+              nombre para llegar a uno en particular.
+            </p>
+          )}
+
+          {/*
             Se informa el número, nunca el contenido. Saber que hay algo que no
             se puede ver es distinto de creer que no existe.
           */}

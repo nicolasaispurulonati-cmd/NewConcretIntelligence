@@ -54,7 +54,12 @@ before(async () => {
       fullName: 'Preparador',
       roles: [],
       capabilities: resolveCapabilities({
-        fromRoles: ['products.product.admin', 'sales.sale.admin', 'executive.financials.read'],
+        fromRoles: [
+          'products.product.admin',
+          'sales.sale.admin',
+          'knowledge.document.admin',
+          'executive.financials.read',
+        ],
       }),
     }),
   };
@@ -121,6 +126,73 @@ describe('restrictedCount refleja lo que el permiso oculta', () => {
 
     assert.equal(vecinosVisibles.length, 0, 'Marketing no ve ninguna venta');
     assert.equal(parcial.restrictedCount, 2, 'pero el sistema le informa que hay dos');
+  });
+
+  /**
+   * Las tres situaciones que el universo tiene que poder distinguir.
+   *
+   * Antes había un solo número y mezclaba dos causas. Un nodo con más vecinos
+   * visibles que el límite mostraba una parte y declaraba `restrictedCount: 0`
+   * — literalmente "no hay nada que no puedas ver" mientras escondía cosas que
+   * la persona sí podía ver.
+   *
+   * Se resuelven pidiendo cosas distintas: una, permiso; la otra, ampliar la
+   * consulta. Confundirlas deja al usuario sin saber cuál le está pasando.
+   */
+  it('distingue lo cortado por el límite de lo oculto por permiso', async () => {
+    const producto = await crear(preparador, {
+      type: 'product',
+      slug: `producto-truncado-${marca}`,
+      displayName: `Producto truncado ${marca}`,
+      status: 'activo',
+    });
+
+    // Cinco documentos, que Marketing puede ver.
+    for (const n of [1, 2, 3, 4, 5]) {
+      const documento = await crear(preparador, {
+        type: 'document',
+        slug: `documento-truncado-${marca}-${n}`,
+        displayName: `Ficha ${marca}-${n}`,
+        status: 'vigente',
+      });
+      await relate(preparador, { type: 'documents', fromId: documento.id, toId: producto.id });
+    }
+
+    // Y una venta, que no.
+    const venta = await crear(preparador, {
+      type: 'sale',
+      slug: `venta-truncada-${marca}`,
+      displayName: `Venta ${marca}`,
+      status: 'facturada',
+    });
+    await relate(preparador, { type: 'includes_product', fromId: venta.id, toId: producto.id });
+
+    // ── Situación 1: no hay más ──────────────────────────────────────────
+    const completo = await getEntityUniverse(preparador, producto.id);
+    assert.equal(completo.sections.flatMap((s) => s.nodes).length, 6);
+    assert.equal(completo.restrictedCount, 0, 've todo');
+    assert.equal(completo.truncatedCount, 0, 'y entró todo');
+
+    // ── Situación 2: hay más y las podés ver ─────────────────────────────
+    const cortado = await getEntityUniverse(preparador, producto.id, { relatedLimit: 3 });
+    assert.equal(cortado.sections.flatMap((s) => s.nodes).length, 3, 'devuelve la ventana');
+    assert.equal(cortado.truncatedCount, 3, 'y avisa cuántas quedaron afuera');
+    assert.equal(
+      cortado.restrictedCount,
+      0,
+      'cortar por límite no puede contarse como oculto por permiso',
+    );
+
+    // ── Situación 3: hay más y no las podés ver ──────────────────────────
+    const restringido = await getEntityUniverse(marketing, producto.id);
+    assert.equal(restringido.sections.flatMap((s) => s.nodes).length, 5, 'los cinco documentos');
+    assert.equal(restringido.restrictedCount, 1, 'la venta, que no puede ver');
+    assert.equal(restringido.truncatedCount, 0, 'nada quedó fuera por el límite');
+
+    // ── Las dos causas a la vez, cada una con su número ──────────────────
+    const ambas = await getEntityUniverse(marketing, producto.id, { relatedLimit: 2 });
+    assert.equal(ambas.truncatedCount, 3, 'de los cinco visibles entraron dos');
+    assert.equal(ambas.restrictedCount, 1, 'y la venta sigue siendo la única oculta');
   });
 
   it('no filtra nada sobre los elementos restringidos', async () => {
