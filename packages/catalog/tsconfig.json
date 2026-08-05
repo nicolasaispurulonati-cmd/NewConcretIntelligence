@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  // Sólo el lenguaje del negocio. El catálogo no conoce la base, ni ventas, ni
+  // la aplicación: es un puerto, y un puerto que sabe quién lo llama deja de
+  // serlo.
+  "references": [{ "path": "../domain" }],
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"]
+}

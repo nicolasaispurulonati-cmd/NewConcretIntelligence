@@ -66,6 +66,22 @@ Llega también al asistente: `renderContext` (`packages/ai/src/retrieval.ts`) le
 
 ---
 
+## DT-005 · El catálogo son datos ficticios
+
+**Detectado:** 2026-08-06, al construir el puerto de catálogo (D-012).
+
+**Qué es:** los productos, precios, listas y stock que devuelve el catálogo salen de `packages/catalog/src/seed.ts` y **ninguno es real**. Los quince artículos son representativos de las cinco líneas del negocio y los importes son plausibles en su orden de magnitud, nada más: no salieron de ninguna lista de NewConcret. Las dos listas de precios —general y distribuidor— existen para que el mecanismo de "el precio que le corresponde a este cliente" esté probado, no porque ésas sean las listas reales.
+
+**Por qué se pospone:** Tango es la fuente de verdad (D-001) y todavía no se sabe dónde corre. Esperar esa respuesta bloquearía el camino de escritura entero, que es lo único que separa al sistema de tener un usuario.
+
+**Cuándo se resuelve:** cuando exista el puente con Tango. Es reemplazar el adaptador detrás del puerto: por D-012, ninguna capa superior se entera. Concretamente, `getCatalog()` en `packages/catalog/src/index.ts` devuelve otro objeto y nada más cambia.
+
+**Lo que hay que revisar al reemplazarlo, y que no es obvio:** el puerto asume una lista de precios por nombre y un precio por artículo y lista. Si Tango modela descuentos por volumen, por cliente o por línea de producto —pregunta 0.1.7 del relevamiento comercial, todavía sin responder—, el puerto se queda corto y hay que ampliarlo antes de conectar, no después.
+
+**Estado:** abierta
+
+---
+
 ## Cuándo una cosa va acá y cuándo se arregla en el momento
 
 Va acá lo que está mal, se entiende, y arreglarlo ahora costaría más que el daño que hace — porque depende de algo que todavía no existe, o porque el arreglo suelto contradice un diseño ya decidido. Se arregla en el momento lo que produce una creencia falsa en alguien que decide, lo que se puede corregir sin abrir otra discusión, y todo lo que sea una fuga de datos.

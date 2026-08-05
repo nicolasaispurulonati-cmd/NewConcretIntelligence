@@ -1,0 +1,23 @@
+{
+  "name": "@nci/catalog",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "El puerto de catálogo: qué necesita NCI de productos, precios y disponibilidad.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node ../../scripts/correr.mjs \"src/**/!(*.integration).test.ts\" -- --import tsx"
+  },
+  "dependencies": {
+    "@nci/domain": "*"
+  }
+}

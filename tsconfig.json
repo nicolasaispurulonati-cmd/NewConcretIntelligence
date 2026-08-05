@@ -10,6 +10,7 @@
   "files": [],
   "references": [
     { "path": "./packages/domain" },
+    { "path": "./packages/catalog" },
     { "path": "./packages/db" },
     { "path": "./packages/core" },
     { "path": "./packages/design" },

@@ -228,6 +228,24 @@ El fundamento real es otro y no depende del motor: **las pruebas de integración
 
 ---
 
+## D-012 · El catálogo entra por un puerto, y hoy lo cumple una semilla
+
+**Fecha:** 2026-08-06 · **Estado:** vigente
+
+**Decisión:** NCI le pide al catálogo tres cosas —buscar productos, obtener el precio según lista, consultar disponibilidad— a través de un puerto expresado en lenguaje de negocio, sin ninguna referencia a de dónde salen los datos. Hoy lo cumple un adaptador con datos ficticios. Cuando exista el puente con Tango se cambia una función y ninguna capa superior cambia una línea.
+
+**Motivo:** Tango es la fuente de verdad de productos, precios, listas y stock (D-001), pero todavía no se sabe dónde corre ni cómo se integra — la auditoría lo dejó como el hallazgo que puede invalidar un pilar entero. Esperar esa respuesta bloquearía el camino de escritura, que es la brecha entre lo construido y que alguien lo use. La alternativa descartada era cotizar con renglones libres hasta que Tango esté: funciona, pero el día de la integración habría que rehacer el flujo entero en vez de reemplazar un adaptador.
+
+**La regla que hace que esto sirva:** el resto del sistema **no puede distinguir un adaptador del otro**. No hay en el puerto ningún campo de procedencia, ninguna bandera, ningún método que sólo tenga sentido con uno de los dos, y `getCatalog()` no recibe parámetros. Si alguna capa pudiera saber que el catálogo es de semilla, escribiría una rama para ese caso — y esa rama sobreviviría a la integración, silenciosa y equivocada. Hay una prueba que lo verifica.
+
+**Consecuencias:** habilita construir y probar el flujo comercial completo antes de resolver la integración. Cierra la posibilidad de que un dominio consulte el catálogo por su cuenta. Cuesta que la marca de "estos datos son ficticios" no pueda vivir en los datos: vive en el adaptador y en [`docs/12`](12-deuda-conocida.md), que es donde alguien la va a buscar.
+
+**Una consecuencia menor, ya aplicada:** el tipo `Cents` se mudó de `@nci/sales` a `@nci/domain`. El catálogo cotiza y no puede depender de ventas — el modelo declara que ventas depende de productos, no al revés. Un mismo concepto nombrado dos veces es la puerta de entrada a que signifiquen dos cosas distintas.
+
+**Evidencia:** `packages/catalog/src/port.ts` (el puerto), `packages/catalog/src/seed.ts` (el adaptador, con la advertencia arriba de todo), `packages/catalog/src/catalog.test.ts` (el contrato y la prueba de que la procedencia no se filtra).
+
+---
+
 ## Cómo se agrega una entrada
 
 Se numera con el siguiente `D-00N` disponible, se agrega al final, y no se toca ninguna de las anteriores salvo para marcarlas como supersedidas por la nueva. Una entrada puede quedar supersedida en parte: cuando pasa, se dice qué parte, para que nadie tenga que deducir si el resto sigue en pie.

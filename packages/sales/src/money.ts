@@ -10,8 +10,16 @@
  * casos que importan: el redondeo, el descuento y el IVA.
  */
 
-/** Un importe en centavos. El alias existe para que el tipo se lea. */
-export type Cents = number;
+/**
+ * Un importe en centavos.
+ *
+ * El nombre vive en `@nci/domain` desde que el catálogo también cotiza: el
+ * modelo declara que ventas depende de productos, así que el tipo no podía
+ * quedarse acá. Se reexporta para que nada de lo que ya lo importa cambie.
+ */
+import type { Cents } from '@nci/domain';
+
+export type { Cents };
 
 /**
  * Redondeo comercial: a la unidad más cercana, y los medios hacia afuera.
