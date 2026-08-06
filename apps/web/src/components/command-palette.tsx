@@ -14,6 +14,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+/**
+ * El evento con el que cualquier parte de la interfaz pide abrir la paleta.
+ *
+ * Se expone como constante para que el disparador de la cabecera y el que
+ * escucha acá no puedan quedar escritos distinto.
+ */
+export const ABRIR_PALETA = 'nci:abrir-paleta';
+
 interface PaletteHit {
   readonly id: string;
   readonly type: string;
@@ -77,8 +85,16 @@ export function CommandPalette(): React.ReactElement | null {
       if (event.key === 'Escape') setOpen(false);
     }
 
+    function onAbrir(): void {
+      setOpen(true);
+    }
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener(ABRIR_PALETA, onAbrir);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener(ABRIR_PALETA, onAbrir);
+    };
   }, []);
 
   useEffect(() => {

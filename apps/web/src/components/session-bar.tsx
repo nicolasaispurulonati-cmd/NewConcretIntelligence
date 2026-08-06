@@ -41,16 +41,33 @@ export function SessionBar({ actor }: { actor: Actor }): React.ReactElement {
     <div className="session">
       <p className="session__who">
         <span className="session__name">{actor.fullName}</span>
+        {/* El rol, con el nombre que le da el sistema de permisos. No un
+            "nivel de acceso" inventado: si dice Comercial es porque el Actor
+            tiene ese rol, y es lo que explica qué se ve y qué no. */}
         <span className="session__role">
           {roles.length > 0 ? roles.join(' · ') : 'Sin rol asignado'}
         </span>
       </p>
 
+      <span className="session__avatar" aria-hidden="true">
+        {iniciales(actor.fullName)}
+      </span>
+
       <form action={signOutAction}>
         <button className="session__exit" type="submit">
-          Cerrar sesión
+          Salir
         </button>
       </form>
     </div>
   );
+}
+
+/** Las iniciales del nombre. Decorativas: el nombre completo está al lado. */
+function iniciales(fullName: string): string {
+  return fullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0]?.toUpperCase() ?? '')
+    .join('');
 }

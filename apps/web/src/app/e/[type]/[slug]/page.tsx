@@ -14,7 +14,7 @@ import { notFound } from 'next/navigation';
 
 import { getEntityBySlug, getEntityUniverse, isNciError } from '@nci/core';
 import { formatRelativeTime } from '@nci/design';
-import { isEntityTypeId } from '@nci/domain';
+import { ENTITY_TYPES, isEntityTypeId } from '@nci/domain';
 
 import { Notice } from '@/components/notice';
 import { requireScope } from '@/lib/session';
@@ -35,6 +35,16 @@ export default async function EntityPage({
 
     return (
       <>
+        <p className="page__breadcrumb">
+          <Link href="/">Escritorio</Link>
+          <span>·</span>
+          <Link href={`/buscar?dominio=${ENTITY_TYPES[type].domain}`}>
+            {universe.meaning.domainName}
+          </Link>
+          <span>·</span>
+          <span>{universe.meaning.typeName}</span>
+        </p>
+
         <header className="identity">
           <p className="identity__type">{universe.meaning.typeName}</p>
           <h1 className="identity__name">{entity.displayName}</h1>
@@ -44,7 +54,11 @@ export default async function EntityPage({
             {entity.status && <span>Estado: {entity.status}</span>}
             <span>Dominio: {universe.meaning.domainName}</span>
             <span>Actualizado {formatRelativeTime(entity.updatedAt).toLowerCase()}</span>
-            {entity.archivedAt && <span>Archivado</span>}
+            {/* Archivar es sacar de la vista, no borrar. Que se diga, porque
+                explica por qué esto no aparece en las búsquedas. */}
+            {entity.archivedAt && (
+              <span>Archivado {formatRelativeTime(entity.archivedAt).toLowerCase()}</span>
+            )}
           </div>
 
           {/* Qué es esta entidad en el lenguaje del negocio, no en el del sistema. */}

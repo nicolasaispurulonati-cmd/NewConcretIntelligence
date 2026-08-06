@@ -45,71 +45,61 @@ export default async function SignInPage({
   const { error } = await searchParams;
 
   return (
-    <>
-      <h1 className="page__greeting">Ingresar</h1>
-      <p className="page__lede">Toda la inteligencia de NewConcret, en un solo lugar.</p>
-
-      {error === 'credenciales' && (
-        <div style={{ marginBottom: 'var(--nci-space-5)' }}>
-          <Notice
-            title="No fue posible ingresar"
-            reason="La combinación de correo y contraseña no coincide con ninguna cuenta activa."
-            actions={[{ label: 'Escribir de nuevo' }]}
-          />
+    <div className="ingreso__marco">
+      {/*
+        La mitad de la identidad.
+        Es decorativa, y por eso `aria-hidden`: no dice nada que no esté
+        también del lado del formulario. Quien navega con lector de pantalla
+        llega directo a lo único que hay que hacer acá, que es entrar.
+      */}
+      <aside className="ingreso__marca" aria-hidden="true">
+        <div className="ingreso__marca-contenido">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="ingreso__logo-marca" src="/newconcret.webp" alt="" />
+          <p className="ingreso__frase">Toda la inteligencia de la empresa, en un solo lugar.</p>
         </div>
-      )}
+      </aside>
 
-      <form
-        action={signInAction}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--nci-space-4)',
-          maxWidth: '24rem',
-        }}
-      >
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--nci-space-2)' }}>
-          <span style={{ fontSize: 'var(--nci-text-sm)', color: 'var(--nci-text-muted)' }}>
-            Correo
-          </span>
-          <input
-            className="palette__input"
-            style={{
-              border: '1px solid var(--nci-border-strong)',
-              borderRadius: 'var(--nci-radius-sm)',
-              fontSize: 'var(--nci-text-base)',
-              padding: 'var(--nci-space-3)',
-            }}
-            type="email"
-            name="email"
-            required
-            autoComplete="email"
-          />
-        </label>
+      <main className="ingreso__acceso">
+        <div className="ingreso__columna">
+          {/* El logotipo de este lado sólo aparece cuando el panel de la
+              izquierda no entra. Con los dos visibles, la marca se diría dos
+              veces en la misma pantalla. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="ingreso__logo" src="/newconcret.webp" alt="NewConcret" />
 
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 'var(--nci-space-2)' }}>
-          <span style={{ fontSize: 'var(--nci-text-sm)', color: 'var(--nci-text-muted)' }}>
-            Contraseña
-          </span>
-          <input
-            className="palette__input"
-            style={{
-              border: '1px solid var(--nci-border-strong)',
-              borderRadius: 'var(--nci-radius-sm)',
-              fontSize: 'var(--nci-text-base)',
-              padding: 'var(--nci-space-3)',
-            }}
-            type="password"
-            name="password"
-            required
-            autoComplete="current-password"
-          />
-        </label>
+          <header className="page__header">
+            <h1 className="page__greeting">Ingresar</h1>
+            <p className="page__lede">
+              Cada persona ve una plataforma distinta, así que lo primero es saber quién sos.
+            </p>
+          </header>
 
-        <button className="button button--primary" type="submit" style={{ alignSelf: 'flex-start' }}>
-          Ingresar
-        </button>
-      </form>
-    </>
+          {error === 'credenciales' && (
+            <Notice
+              title="No fue posible ingresar"
+              reason="La combinación de correo y contraseña no coincide con ninguna cuenta activa."
+              actions={[{ label: 'Escribir de nuevo' }]}
+            />
+          )}
+
+          <form className="ingreso" action={signInAction}>
+            <label className="field">
+              <span className="font-label-caps">Correo</span>
+              <input type="email" name="email" required autoComplete="email" autoFocus />
+            </label>
+
+            <label className="field">
+              <span className="font-label-caps">Contraseña</span>
+              <input type="password" name="password" required autoComplete="current-password" />
+            </label>
+
+            <button className="button button--primary" type="submit">
+              Ingresar
+            </button>
+          </form>
+        </div>
+      </main>
+    </div>
   );
 }

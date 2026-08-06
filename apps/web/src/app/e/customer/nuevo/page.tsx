@@ -15,11 +15,13 @@ export default async function NuevoClientePage(): Promise<React.ReactElement> {
 
   return (
     <>
-      <h1 className="page__greeting">Nuevo cliente</h1>
-      <p className="page__lede">
-        Alcanza con el nombre y una forma de contactarlo. Todo lo demás se puede completar cuando
-        haga falta.
-      </p>
+      <header className="page__header">
+        <h1 className="page__greeting">Nuevo cliente</h1>
+        <p className="page__lede">
+          Alcanza con el nombre y una forma de contactarlo. Todo lo demás se puede completar cuando
+          haga falta.
+        </p>
+      </header>
 
       <section className="section">
         <NuevoCliente />

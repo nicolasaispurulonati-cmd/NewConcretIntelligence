@@ -211,7 +211,6 @@ function Campo({
     <label className="alta__campo">
       <span className="font-label-caps">{etiqueta}</span>
       <input
-        className="palette__input"
         value={valor}
         onChange={(evento) => onCambio(evento.target.value)}
         autoFocus={autoFocus}

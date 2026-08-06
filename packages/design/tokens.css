@@ -12,6 +12,16 @@
   --nci-brand-strong: #9a0a29;
   --nci-brand-soft: #1c070d;
 
+  /**
+   * El carmesí, cuando es texto y no fondo.
+   *
+   * `--nci-brand` sobre el negro de la plataforma da 3:1: alcanza para un
+   * borde o un relleno, no para una palabra. Un nombre propio escrito en el
+   * color de la marca tiene que poder leerse, así que el acento tipográfico
+   * usa este tono y no aquél. Son el mismo color con distinto trabajo.
+   */
+  --nci-brand-on-surface: #ef4a68;
+
   /* ── Superficies ────────────────────────────────────────────────────── */
   --nci-surface: #141414;
   --nci-surface-raised: #1d1d1d;
@@ -36,6 +46,11 @@
   --nci-state-attention: #c9902c;
   --nci-state-critical: #bd0d33;
   --nci-state-neutral: #6e6e6e;
+
+  /* Lo crítico dicho en palabras, que es como se lee un error. Mismo motivo
+     que --nci-brand-on-surface: el punto de estado y la frase que lo explica
+     no necesitan el mismo contraste. */
+  --nci-danger: #ef4a68;
 
   /* ── Tipografía ─────────────────────────────────────────────────────── */
   --nci-font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -96,6 +111,10 @@
     --nci-brand-soft: #fdeef1;
     --nci-state-ok: #2f7742;
     --nci-state-attention: #9a6d10;
+
+    /* Sobre blanco el problema se invierte: el acento tiene que oscurecerse. */
+    --nci-brand-on-surface: #a80c2c;
+    --nci-danger: #a80c2c;
   }
 }
 
@@ -115,6 +134,9 @@
   --nci-brand-soft: #fdeef1;
   --nci-state-ok: #2f7742;
   --nci-state-attention: #9a6d10;
+
+  --nci-brand-on-surface: #a80c2c;
+  --nci-danger: #a80c2c;
 }
 
 *,

@@ -1,147 +1,925 @@
 @import "tailwindcss";
 @import '@nci/design/tokens.css';
 
+/**
+ * La hoja de la aplicación.
+ *
+ * Una sola fuente de verdad: todo sale de los tokens de `@nci/design`. El
+ * bloque `@theme` no define colores, los reexporta — así una utilidad de
+ * Tailwind y una clase escrita a mano no pueden discrepar, y el modo claro
+ * funciona en las dos sin escribirlo dos veces.
+ */
+
 @theme {
-  --color-on-tertiary-fixed: #1b1c1c;
-  --color-surface-container-highest: #353534;
-  --color-secondary-fixed-dim: #c8c6c5;
-  --color-on-error: #690005;
-  --color-on-primary: #690006;
-  --color-inverse-primary: #c00014;
-  --color-on-primary-container: #fffafa;
-  --color-on-secondary: #313030;
-  --color-surface-container-high: #2a2a2a;
-  --color-on-surface: #e5e2e1;
-  --color-secondary-fixed: #e5e2e1;
-  --color-on-tertiary-fixed-variant: #474746;
-  --color-tertiary: #c8c6c5;
-  --color-on-surface-variant: #e7bdb8;
-  --color-outline: #ae8883;
-  --color-on-secondary-fixed-variant: #474746;
-  --color-surface-variant: #353534;
-  --color-error-container: #93000a;
-  --color-on-error-container: #ffdad6;
-  --color-tertiary-fixed: #e4e2e1;
-  --color-surface-dim: #131313;
-  --color-background: #131313;
-  --color-surface-container-lowest: #0e0e0e;
-  --color-inverse-on-surface: #313030;
-  --color-surface-container: #201f1f;
-  --color-on-secondary-fixed: #1c1b1b;
-  --color-surface: #131313;
-  --color-tertiary-container: #757474;
-  --color-surface-tint: #ffb4ab;
-  --color-surface-container-low: #1c1b1b;
-  --color-on-secondary-container: #b7b5b4;
-  --color-tertiary-fixed-dim: #c8c6c5;
-  --color-on-primary-fixed-variant: #93000d;
-  --color-secondary: #c8c6c5;
-  --color-primary-container: #e31e24;
-  --color-inverse-surface: #e5e2e1;
-  --color-on-tertiary: #303030;
-  --color-outline-variant: #5d3f3c;
-  --color-surface-bright: #3a3939;
-  --color-primary-fixed: #ffdad6;
-  --color-secondary-container: #474746;
-  --color-on-tertiary-container: #fefbfb;
-  --color-on-background: #e5e2e1;
-  --color-primary: #ffb4ab;
-  --color-on-primary-fixed: #410002;
-  --color-primary-fixed-dim: #ffb4ab;
-  --color-error: #ffb4ab;
+  /* ── Color ──────────────────────────────────────────────────────────── */
+  --color-background: var(--nci-surface);
+  --color-surface: var(--nci-surface);
+  --color-surface-sunken: var(--nci-surface-sunken);
+  --color-surface-raised: var(--nci-surface-raised);
+  --color-surface-overlay: var(--nci-surface-overlay);
 
-  --font-headline-md: "Hanken Grotesk", sans-serif;
-  --font-body-lg: "Inter", sans-serif;
-  --font-headline-lg-mobile: "Hanken Grotesk", sans-serif;
-  --font-headline-lg: "Hanken Grotesk", sans-serif;
-  --font-label-caps: "Hanken Grotesk", sans-serif;
-  --font-body-md: "Inter", sans-serif;
-  --font-data-mono: "JetBrains Mono", monospace;
-  --font-display-lg: "Hanken Grotesk", sans-serif;
+  --color-on-surface: var(--nci-text);
+  --color-on-surface-variant: var(--nci-text-muted);
+  --color-on-surface-faint: var(--nci-text-faint);
 
-  --spacing-grid-margin: 32px;
-  --spacing-stack-sm: 8px;
-  --spacing-stack-lg: 32px;
-  --spacing-stack-md: 16px;
-  --spacing-grid-gutter: 24px;
-  --spacing-stack-xs: 4px;
-  --spacing-container-padding: 24px;
+  --color-border: var(--nci-border);
+  --color-border-strong: var(--nci-border-strong);
+
+  /* Dos trabajos distintos para el mismo carmesí: rellenar y escribir. */
+  --color-brand: var(--nci-brand);
+  --color-brand-text: var(--nci-brand-on-surface);
+  --color-on-brand: var(--nci-text-on-brand);
+
+  --color-state-ok: var(--nci-state-ok);
+  --color-state-attention: var(--nci-state-attention);
+  --color-state-critical: var(--nci-state-critical);
+  --color-state-neutral: var(--nci-state-neutral);
+
+  /* ── Tipografía ─────────────────────────────────────────────────────── */
+  --font-display: 'Hanken Grotesk', var(--nci-font);
+  --font-body: 'Inter', var(--nci-font);
+  --font-mono: 'JetBrains Mono', var(--nci-font-mono);
+
+  /* ── Espaciado ──────────────────────────────────────────────────────── */
+  --spacing-stack-xs: var(--nci-space-1);
+  --spacing-stack-sm: var(--nci-space-2);
+  --spacing-stack-md: var(--nci-space-4);
+  --spacing-stack-lg: var(--nci-space-5);
+  --spacing-grid-gutter: var(--nci-space-5);
+  --spacing-grid-margin: var(--nci-space-6);
 }
 
-@layer base {
-  html, body {
-    margin: 0;
-    padding: 0;
-  }
-  body {
-    overscroll-behavior: none;
-  }
+/* ═════════════════════════════════════════════════════════════════════════
+   Base
+   ═════════════════════════════════════════════════════════════════════════ */
+
+body {
+  font-family: 'Inter', var(--nci-font);
+  overscroll-behavior-y: none;
+}
+
+/**
+ * La barra de desplazamiento se ve.
+ *
+ * Ocultarla ahorra unos píxeles y le quita a la persona la única señal de
+ * cuánto falta de una lista. El Principio 11 dice que el usuario nunca se
+ * pierde, y saber dónde está dentro de una página es parte de eso.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--nci-border-strong) transparent;
 }
 
 ::-webkit-scrollbar {
-  display: none;
+  width: 10px;
+  height: 10px;
 }
 
-.font-headline-md {
-  font-family: "Hanken Grotesk", sans-serif;
-  font-size: 1rem;
-  line-height: 1.5rem;
-  font-weight: 600;
+::-webkit-scrollbar-thumb {
+  background: var(--nci-border-strong);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
 }
 
-.font-body-lg {
-  font-family: "Inter", sans-serif;
-  font-size: 1rem;
-  line-height: 1.5rem;
-  font-weight: 400;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.font-headline-lg-mobile {
-  font-family: "Hanken Grotesk", sans-serif;
-  font-size: 1.25rem;
-  line-height: 1.75rem;
-  font-weight: 600;
+kbd {
+  font-family: 'JetBrains Mono', var(--nci-font-mono);
+  font-size: 0.8em;
+  padding: 1px 5px;
+  border: 1px solid var(--nci-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--nci-radius-sm);
+  background: var(--nci-surface-overlay);
+  color: var(--nci-text-muted);
 }
 
-.font-headline-lg {
-  font-family: "Hanken Grotesk", sans-serif;
-  font-size: 1.5rem;
-  line-height: 2rem;
-  letter-spacing: -0.01em;
-  font-weight: 600;
-}
+/* ═════════════════════════════════════════════════════════════════════════
+   Escalas tipográficas
 
-.font-label-caps {
-  font-family: "Hanken Grotesk", sans-serif;
-  font-size: 0.6875rem;
-  line-height: 1rem;
-  letter-spacing: 0.05em;
-  font-weight: 700;
-}
-
-.font-body-md {
-  font-family: "Inter", sans-serif;
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  font-weight: 400;
-}
-
-.font-data-mono {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  font-weight: 500;
-}
+   Nombradas por su papel y no por su tamaño: quien escribe una pantalla
+   elige "el título de una sección", no "veinte píxeles".
+   ═════════════════════════════════════════════════════════════════════════ */
 
 .font-display-lg {
-  font-family: "Hanken Grotesk", sans-serif;
-  font-size: clamp(1.5rem, 3vw, 2.25rem);
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: clamp(1.5rem, 3vw, var(--nci-text-3xl));
   line-height: 1.15;
   letter-spacing: -0.02em;
   font-weight: 700;
 }
 
-/* ── Command Palette ──────────────────────────────────────────────────── */
+.font-headline-lg {
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-xl);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+
+.font-headline-md {
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-lg);
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+.font-body-lg {
+  font-family: 'Inter', var(--nci-font);
+  font-size: var(--nci-text-base);
+  line-height: var(--nci-leading-normal);
+}
+
+.font-body-md {
+  font-family: 'Inter', var(--nci-font);
+  font-size: var(--nci-text-sm);
+  line-height: var(--nci-leading-normal);
+}
+
+.font-label-caps {
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-xs);
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--nci-text-muted);
+}
+
+.font-data-mono {
+  font-family: 'JetBrains Mono', var(--nci-font-mono);
+  font-size: var(--nci-text-sm);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   El armazón
+
+   Barra lateral fija, cabecera fija, contenido al medio. Cinco entradas de
+   navegación porque se espera que casi nadie las use: la navegación real es
+   Ctrl+K.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.shell {
+  display: grid;
+  grid-template-columns: 15rem 1fr;
+  min-height: 100vh;
+}
+
+.shell__aside {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-5);
+  padding: var(--nci-space-4) var(--nci-space-3);
+  background: var(--nci-surface-sunken);
+  border-right: 1px solid var(--nci-border);
+}
+
+.shell__main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* El ancho de lectura vive acá y no en cada pantalla: una página nueva
+   hereda el encuadre sin tener que acordarse de pedirlo. */
+.shell__content {
+  flex: 1;
+  width: 100%;
+  max-width: var(--nci-content-width);
+  margin: 0 auto;
+  padding: var(--nci-space-6) var(--nci-space-5) var(--nci-space-7);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-6);
+}
+
+/**
+ * El armazón de afuera: ingreso, y cualquier pantalla previa a la sesión.
+ *
+ * No acota ni centra nada. El ingreso ocupa la pantalla entera de borde a
+ * borde, y una pantalla que sí necesite estar centrada lo pide con
+ * `.afuera__centro`.
+ */
+.afuera {
+  display: grid;
+  min-height: 100vh;
+}
+
+.afuera__centro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nci-space-5);
+}
+
+.shell__skip {
+  position: absolute;
+  left: var(--nci-space-3);
+  top: var(--nci-space-3);
+  z-index: 200;
+  padding: var(--nci-space-2) var(--nci-space-4);
+  border-radius: var(--nci-radius);
+  background: var(--nci-brand);
+  color: var(--nci-text-on-brand);
+  transform: translateY(-200%);
+  transition: transform var(--nci-transition);
+}
+
+.shell__skip:focus-visible {
+  transform: translateY(0);
+}
+
+/* ── Marca ──────────────────────────────────────────────────────────────── */
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nci-space-1);
+  padding: var(--nci-space-2);
+  color: var(--nci-text);
+  text-decoration: none;
+}
+
+/**
+ * El logo.
+ *
+ * El archivo es blanco sobre transparente, así que sobre el negro de la
+ * plataforma va tal cual. En modo claro desaparecería —blanco sobre blanco—
+ * y por eso se invierte: es un logotipo de un solo color, la inversión da
+ * exactamente el mismo dibujo en negro y no lo deforma.
+ */
+.brand__logo {
+  width: 100%;
+  max-width: 13.5rem;
+  height: auto;
+  display: block;
+}
+
+.brand__product {
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--nci-text-faint);
+  padding-left: 2px;
+}
+
+/**
+ * El logotipo sobre una superficie clara.
+ *
+ * Vale para todos los lugares donde el logo se apoya en el fondo de la
+ * plataforma, no sólo el de la barra lateral: en modo claro, blanco sobre
+ * blanco no se ve. Un logo que se dibuja encima de una foto queda afuera de
+ * esta regla, porque ahí el fondo lo pone la foto y no la superficie.
+ */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) .brand__logo,
+  :root:not([data-theme='dark']) .ingreso__logo {
+    filter: invert(1);
+  }
+}
+
+:root[data-theme='light'] .brand__logo,
+:root[data-theme='light'] .ingreso__logo {
+  filter: invert(1);
+}
+
+/* ── Navegación ─────────────────────────────────────────────────────────── */
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav__group {
+  margin-top: var(--nci-space-4);
+  padding-top: var(--nci-space-3);
+  border-top: 1px solid var(--nci-border);
+}
+
+.nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--nci-space-3);
+  padding: var(--nci-space-2) var(--nci-space-3);
+  border-radius: var(--nci-radius);
+  color: var(--nci-text-muted);
+  text-decoration: none;
+  font-size: var(--nci-text-sm);
+  transition: background var(--nci-transition), color var(--nci-transition);
+}
+
+.nav__item:hover {
+  background: var(--nci-surface-raised);
+  color: var(--nci-text);
+}
+
+/* Se marca con fondo y con una barra, no sólo con color: el Principio 8
+   vale también para "dónde estoy". */
+.nav__item[aria-current='page'] {
+  background: var(--nci-brand-soft);
+  color: var(--nci-brand-on-surface);
+  box-shadow: inset 2px 0 0 var(--nci-brand);
+  font-weight: 600;
+}
+
+.nav__item svg {
+  flex-shrink: 0;
+}
+
+/* ── Cabecera ───────────────────────────────────────────────────────────── */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nci-space-4);
+  padding: var(--nci-space-3) var(--nci-space-5);
+  background: color-mix(in srgb, var(--nci-surface) 85%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--nci-border);
+}
+
+/* No es un campo de texto: es el disparador de Ctrl+K, y por eso es un
+   botón. Un input que no acepta escritura enseña un gesto que no existe. */
+.topbar__search {
+  display: flex;
+  align-items: center;
+  gap: var(--nci-space-2);
+  flex: 1;
+  max-width: 26rem;
+  padding: var(--nci-space-2) var(--nci-space-3);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius);
+  background: var(--nci-surface-sunken);
+  color: var(--nci-text-faint);
+  font: inherit;
+  font-size: var(--nci-text-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--nci-transition), color var(--nci-transition);
+}
+
+.topbar__search:hover {
+  border-color: var(--nci-border-strong);
+  color: var(--nci-text-muted);
+}
+
+.topbar__search span {
+  flex: 1;
+}
+
+/* ── Quién está usando la plataforma ────────────────────────────────────── */
+
+.session {
+  display: flex;
+  align-items: center;
+  gap: var(--nci-space-3);
+}
+
+.session__who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.session__name {
+  font-size: var(--nci-text-sm);
+  font-weight: 600;
+}
+
+.session__role {
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+}
+
+.session__avatar {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--nci-brand);
+  color: var(--nci-text-on-brand);
+  font-size: var(--nci-text-sm);
+  font-weight: 700;
+  font-family: 'Hanken Grotesk', var(--nci-font);
+}
+
+.session__exit {
+  padding: var(--nci-space-2) var(--nci-space-3);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius);
+  background: transparent;
+  color: var(--nci-text-muted);
+  font: inherit;
+  font-size: var(--nci-text-xs);
+  cursor: pointer;
+  transition: border-color var(--nci-transition), color var(--nci-transition);
+}
+
+.session__exit:hover {
+  border-color: var(--nci-border-strong);
+  color: var(--nci-text);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Página
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.page__greeting {
+  margin: 0;
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: clamp(1.5rem, 3vw, var(--nci-text-3xl));
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.page__greeting em {
+  font-style: normal;
+  color: var(--nci-brand-on-surface);
+}
+
+.page__lede {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--nci-text-muted);
+  font-size: var(--nci-text-sm);
+}
+
+.page__lede a {
+  color: var(--nci-text-muted);
+}
+
+/* La ruta de vuelta. Principio 11: siempre se sabe cómo volver. */
+.page__breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--nci-space-2);
+  margin: 0;
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-faint);
+}
+
+.page__breadcrumb a {
+  color: var(--nci-text-muted);
+  text-decoration: none;
+}
+
+.page__breadcrumb a:hover {
+  color: var(--nci-text);
+  text-decoration: underline;
+}
+
+.page__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-2);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-3);
+}
+
+.section__title {
+  margin: 0;
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-lg);
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.section__title--sub {
+  font-size: var(--nci-text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--nci-text-muted);
+}
+
+a {
+  color: var(--nci-brand-on-surface);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   La identidad de una entidad
+
+   Principio 12: cliente, producto, proveedor y documento comparten esta
+   estructura. El usuario la aprende una vez.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-2);
+  padding: var(--nci-space-5);
+  border: 1px solid var(--nci-border);
+  border-left: 3px solid var(--nci-brand);
+  border-radius: var(--nci-radius-lg);
+  background: var(--nci-surface-raised);
+}
+
+.identity__type {
+  margin: 0;
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nci-brand-on-surface);
+}
+
+.identity__name {
+  margin: 0;
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-2xl);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+}
+
+.identity__subtitle {
+  margin: 0;
+  color: var(--nci-text-muted);
+}
+
+.identity__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nci-space-2) var(--nci-space-4);
+  margin-top: var(--nci-space-1);
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+}
+
+.identity__meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nci-space-2);
+}
+
+/* Cada dato separado del anterior, sin dibujar una tabla. */
+.identity__meta > span + span::before {
+  content: '';
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--nci-text-faint);
+}
+
+.identity__meaning {
+  margin: var(--nci-space-2) 0 0;
+  padding-top: var(--nci-space-3);
+  border-top: 1px solid var(--nci-border);
+  max-width: 68ch;
+  font-size: var(--nci-text-sm);
+  color: var(--nci-text-muted);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Todo lo relacionado
+
+   Principio 13: las relaciones son visibles. No se navega por módulos.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.universe {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: var(--nci-space-4);
+  align-items: start;
+}
+
+.universe > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-2);
+  padding: var(--nci-space-4);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius-lg);
+  background: var(--nci-surface-raised);
+}
+
+.related {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-1);
+}
+
+.related__item > a {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--nci-space-2) var(--nci-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--nci-radius);
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--nci-transition), border-color var(--nci-transition);
+}
+
+.related__item > a:hover {
+  background: var(--nci-surface);
+  border-color: var(--nci-border);
+}
+
+.related__name {
+  font-size: var(--nci-text-sm);
+  font-weight: 600;
+}
+
+.related__relation {
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+}
+
+/**
+ * Lo que existe y no se puede ver.
+ *
+ * Se informa el número, nunca el contenido. Saber que hay algo fuera de
+ * alcance es distinto de creer que no existe, y la diferencia se nota.
+ */
+.restricted {
+  margin: 0;
+  padding: var(--nci-space-3) var(--nci-space-4);
+  border: 1px dashed var(--nci-border-strong);
+  border-radius: var(--nci-radius);
+  background: var(--nci-surface-sunken);
+  font-size: var(--nci-text-sm);
+  color: var(--nci-text-muted);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Línea de tiempo
+
+   Principio 10: el tiempo es visible. Quién, cuándo, qué cambió.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--nci-space-5);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-4);
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--nci-border);
+}
+
+.timeline__event {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--nci-text-sm);
+}
+
+.timeline__event::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--nci-space-5) * -1);
+  top: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--nci-border-strong);
+  box-shadow: 0 0 0 3px var(--nci-surface);
+}
+
+/* Lo último que pasó se distingue de lo que ya se leyó. */
+.timeline__event:first-child::before {
+  background: var(--nci-brand);
+}
+
+.timeline__when {
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+}
+
+.timeline__source {
+  color: var(--nci-text-faint);
+  font-size: var(--nci-text-xs);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Estado
+
+   Principio 8: nunca sólo un color. El punto acompaña a la palabra, y la
+   palabra acompaña a la explicación.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.status {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--nci-space-2);
+  font-size: var(--nci-text-sm);
+}
+
+.status__dot {
+  align-self: center;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--status-tone, var(--nci-state-neutral));
+}
+
+.status__label {
+  font-weight: 600;
+}
+
+.status__detail {
+  color: var(--nci-text-muted);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Widgets del escritorio
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: var(--nci-space-5);
+  align-items: start;
+}
+
+.widget {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-3);
+  padding: var(--nci-space-4);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius-lg);
+  background: var(--nci-surface-raised);
+}
+
+.widget__head {
+  display: flex;
+  align-items: center;
+  gap: var(--nci-space-2);
+  padding-bottom: var(--nci-space-3);
+  border-bottom: 1px solid var(--nci-border);
+}
+
+.widget__head svg {
+  flex-shrink: 0;
+  color: var(--nci-brand-on-surface);
+}
+
+.widget__title {
+  margin: 0;
+  flex: 1;
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-base);
+  font-weight: 600;
+}
+
+/* Cuántos hay. Un número que se lee de un vistazo y que no reemplaza a
+   ninguna palabra: el título ya dijo de qué se trata. */
+.widget__count {
+  display: grid;
+  place-items: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 var(--nci-space-1);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius-sm);
+  background: var(--nci-surface-sunken);
+  font-family: 'JetBrains Mono', var(--nci-font-mono);
+  font-size: var(--nci-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.widget__label {
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+  max-width: 40ch;
+}
+
+.widget__value {
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-2xl);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* El contexto que convierte un número en información. Principio 2. */
+.widget__context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nci-space-4);
+  margin: 0;
+  padding-bottom: var(--nci-space-3);
+  border-bottom: 1px solid var(--nci-border);
+}
+
+.widget__context > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.widget__context dt {
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+}
+
+.widget__context dd {
+  margin: 0;
+  font-size: var(--nci-text-lg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.widget__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-1);
+}
+
+.widget__line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--nci-space-2) var(--nci-space-3);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius);
+  background: var(--nci-surface);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color var(--nci-transition);
+}
+
+a.widget__line:hover {
+  border-color: var(--nci-brand);
+}
+
+.widget__line-primary {
+  font-size: var(--nci-text-sm);
+  font-weight: 600;
+}
+
+.widget__line-secondary {
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+}
+
+/* Cuándo se calculó, y qué falta. Nunca una lista truncada en silencio. */
+.widget__asof {
+  margin: 0;
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-faint);
+}
+
+.widget__empty {
+  margin: 0;
+  font-size: var(--nci-text-sm);
+  color: var(--nci-text-muted);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Command Palette
+
+   La navegación real de la plataforma.
+   ═════════════════════════════════════════════════════════════════════════ */
 
 .palette__backdrop {
   position: fixed;
@@ -157,9 +935,9 @@
   width: min(40rem, calc(100vw - 2rem));
   height: fit-content;
   max-height: 70vh;
-  background: #201f1f;
-  border: 1px solid #353534;
-  border-radius: 12px;
+  background: var(--nci-surface-raised);
+  border: 1px solid var(--nci-border-strong);
+  border-radius: var(--nci-radius-lg);
   box-shadow: var(--nci-shadow);
   display: flex;
   flex-direction: column;
@@ -168,139 +946,395 @@
 
 .palette__input {
   border: none;
-  border-bottom: 1px solid #353534;
+  border-bottom: 1px solid var(--nci-border);
   background: transparent;
-  color: #e5e2e1;
+  color: var(--nci-text);
   font-family: inherit;
-  font-size: 1.125rem;
-  padding: 1rem;
+  font-size: var(--nci-text-lg);
+  padding: var(--nci-space-4);
   outline: none;
 }
 
 .palette__input::placeholder {
-  color: #474746;
+  color: var(--nci-text-faint);
 }
 
 .palette__results {
   list-style: none;
   margin: 0;
-  padding: 0.5rem;
+  padding: var(--nci-space-2);
   overflow-y: auto;
 }
 
 .palette__group {
-  font-size: 0.75rem;
+  font-size: var(--nci-text-xs);
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #e7bdb8;
-  padding: 0.75rem 0.75rem 0.25rem;
+  color: var(--nci-text-muted);
+  padding: var(--nci-space-3) var(--nci-space-3) var(--nci-space-1);
 }
 
 .palette__option {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--nci-space-3);
   width: 100%;
   text-align: left;
-  padding: 0.5rem 0.75rem;
+  padding: var(--nci-space-2) var(--nci-space-3);
   border: none;
-  border-radius: 4px;
+  border-radius: var(--nci-radius-sm);
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: var(--nci-text-sm);
   cursor: pointer;
 }
 
 .palette__option[data-active='true'] {
-  background: #e31e24;
-  color: #fffafa;
+  background: var(--nci-brand);
+  color: var(--nci-text-on-brand);
+}
+
+.palette__option[data-active='true'] .palette__option-type {
+  color: color-mix(in srgb, var(--nci-text-on-brand) 80%, transparent);
 }
 
 .palette__option-type {
-  font-size: 0.75rem;
-  color: #e7bdb8;
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
   white-space: nowrap;
 }
 
 .palette__empty {
-  padding: 1.25rem 1rem;
-  color: #e7bdb8;
-  font-size: 0.875rem;
+  padding: var(--nci-space-5) var(--nci-space-4);
+  color: var(--nci-text-muted);
+  font-size: var(--nci-text-sm);
 }
 
 .palette__footer {
-  border-top: 1px solid #353534;
-  padding: 0.5rem 1rem;
-  font-size: 0.75rem;
-  color: #e7bdb8;
+  border-top: 1px solid var(--nci-border);
+  padding: var(--nci-space-2) var(--nci-space-4);
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
   display: flex;
-  gap: 1rem;
+  gap: var(--nci-space-4);
 }
 
-/* ── Mensajes del sistema ─────────────────────────────────────────────── */
+/* ═════════════════════════════════════════════════════════════════════════
+   Mensajes del sistema
+
+   Principio 18: el error enseña. Qué pasó, por qué, y qué se puede hacer.
+   ═════════════════════════════════════════════════════════════════════════ */
 
 .notice {
-  border: 1px solid #353534;
-  border-left: 3px solid #e31e24;
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  background: #201f1f;
+  border: 1px solid var(--nci-border);
+  border-left: 3px solid var(--nci-brand);
+  border-radius: var(--nci-radius);
+  padding: var(--nci-space-4) var(--nci-space-5);
+  background: var(--nci-surface-raised);
   max-width: 44rem;
 }
 
 .notice__title {
-  margin: 0 0 0.5rem;
-  font-size: 1.125rem;
+  margin: 0 0 var(--nci-space-2);
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-lg);
   font-weight: 600;
 }
 
 .notice__reason {
-  margin: 0 0 1rem;
-  color: #e7bdb8;
+  margin: 0 0 var(--nci-space-4);
+  color: var(--nci-text-muted);
+  font-size: var(--nci-text-sm);
 }
 
 .notice__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: var(--nci-space-3);
 }
 
 .notice code {
-  font-family: "JetBrains Mono", monospace;
+  font-family: 'JetBrains Mono', var(--nci-font-mono);
   font-size: 0.9em;
-  background: #2a2a2a;
+  background: var(--nci-surface-overlay);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--nci-radius-sm);
 }
 
+/* ── Botones ────────────────────────────────────────────────────────────── */
+
 .button {
-  display: inline-block;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  border: 1px solid #353534;
-  background: #201f1f;
-  color: #e5e2e1;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nci-space-2);
+  padding: var(--nci-space-2) var(--nci-space-4);
+  border-radius: var(--nci-radius);
+  border: 1px solid var(--nci-border-strong);
+  background: var(--nci-surface-overlay);
+  color: var(--nci-text);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--nci-text-sm);
   text-decoration: none;
   cursor: pointer;
-  transition: border-color 140ms ease;
+  transition: border-color var(--nci-transition), background var(--nci-transition);
 }
 
 .button:hover {
-  border-color: #e31e24;
+  border-color: var(--nci-brand);
+}
+
+.button:disabled,
+.button[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.button:disabled:hover,
+.button[aria-disabled='true']:hover {
+  border-color: var(--nci-border-strong);
 }
 
 .button--primary {
-  background: #e31e24;
-  border-color: #e31e24;
-  color: #fffafa;
+  background: var(--nci-brand);
+  border-color: var(--nci-brand);
+  color: var(--nci-text-on-brand);
+}
+
+.button--primary:hover {
+  background: var(--nci-brand-strong);
+  border-color: var(--nci-brand-strong);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Formularios
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-2);
+}
+
+.field input,
+.field select,
+.alta__campo input,
+.alta__campo select {
+  width: 100%;
+  padding: var(--nci-space-2) var(--nci-space-3);
+  border: 1px solid var(--nci-border-strong);
+  border-radius: var(--nci-radius);
+  background: var(--nci-surface-sunken);
+  color: var(--nci-text);
+  font: inherit;
+  font-size: var(--nci-text-sm);
+  outline: none;
+  transition: border-color var(--nci-transition);
+}
+
+.field input:focus,
+.alta__campo input:focus,
+.alta__campo select:focus {
+  border-color: var(--nci-brand);
+}
+
+/* ── Ingreso ────────────────────────────────────────────────────────────── */
+
+.ingreso {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-4);
+  width: 100%;
+  max-width: 22rem;
+  padding: var(--nci-space-6);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius-lg);
+  background: var(--nci-surface-raised);
+}
+
+/**
+ * El ingreso, en dos mitades.
+ *
+ * A la izquierda la identidad; a la derecha lo único que hay que hacer. La
+ * proporción no es mitad y mitad: el formulario manda, así que se le da el
+ * ancho que necesita y la marca se queda con el resto.
+ */
+/**
+ * La columna del formulario tiene un ancho propio; la imagen se queda con lo
+ * que sobre.
+ *
+ * Con dos fracciones el formulario crecía junto a la pantalla y en un monitor
+ * ancho quedaban campos de 700 px, que no se leen mejor por ser más largos.
+ * Así el acceso se mantiene siempre en una medida cómoda y lo que gana el
+ * escritorio grande es imagen.
+ */
+.ingreso__marco {
+  display: grid;
+  grid-template-columns: 1fr minmax(21rem, 29rem);
+  min-height: 100vh;
+}
+
+/* ── La mitad de la marca ───────────────────────────────────────────────── */
+
+/**
+ * La imagen de la empresa: el frente de la planta.
+ *
+ * Para cambiarla alcanza con dejar otro archivo en `apps/web/public/` y
+ * tocar esta línea. El velo de abajo no depende de la foto, así que
+ * cualquier reemplazo sigue quedando legible debajo del logotipo sin
+ * retocarlo.
+ *
+ * El encuadre no está centrado. El panel es una columna alta y la foto es
+ * apaisada, así que `cover` recorta a los costados; con el foco corrido al
+ * 38 % el cartel de NEWCONCRET queda dentro del recorte en lugar de perderse
+ * fuera de cuadro, que es lo que pasaba centrándola.
+ */
+.ingreso__marca {
+  --ingreso-imagen: url('/frente.webp');
+
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  /* Igual en los cuatro lados: el logo se apoya en una esquina, y dos
+     márgenes distintos ahí se leen como un error de alineación. */
+  padding: var(--nci-space-7);
+  overflow: hidden;
+  background-color: var(--nci-surface-sunken);
+  background-image: var(--ingreso-imagen);
+  background-size: cover;
+  background-position: 38% center;
+}
+
+/**
+ * El velo.
+ *
+ * Tres capas con trabajos distintos. Una sombra pareja sobre toda la foto,
+ * que la manda al fondo y deja que el logotipo blanco sea lo primero que se
+ * ve; un refuerzo abajo, donde se apoyan el logo y la frase y donde el
+ * césped al sol daría el peor contraste de la pantalla; y el carmesí, que
+ * entra por la esquina y se disuelve.
+ *
+ * El carmesí es acento, no fondo: si ocupara la mitad entera dejaría de
+ * significar algo.
+ */
+.ingreso__marca::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      75% 50% at 8% 100%,
+      color-mix(in srgb, var(--nci-brand) 34%, transparent) 0%,
+      transparent 70%
+    ),
+    linear-gradient(
+      to top,
+      color-mix(in srgb, #000 88%, transparent) 0%,
+      color-mix(in srgb, #000 62%, transparent) 30%,
+      color-mix(in srgb, #000 46%, transparent) 65%,
+      color-mix(in srgb, #000 42%, transparent) 100%
+    );
+}
+
+.ingreso__marca-contenido {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-4);
+  max-width: 26rem;
+}
+
+/**
+ * El logotipo sobre la foto.
+ *
+ * Lleva clase propia y no la del formulario porque nunca se invierte: acá el
+ * fondo lo pone la imagen, no la superficie de la plataforma, y sigue siendo
+ * oscuro también en modo claro.
+ */
+.ingreso__logo-marca {
+  width: 100%;
+  max-width: 19rem;
+  height: auto;
+  display: block;
+  /* El logo ya no trae aire propio, así que la sombra se le pega al trazo y
+     lo despega de la pared del edificio, que es casi del mismo gris. */
+  filter: drop-shadow(0 2px 12px rgb(0 0 0 / 0.55));
+}
+
+.ingreso__frase {
+  position: relative;
+  margin: 0;
+  max-width: 22ch;
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-2xl);
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  text-wrap: balance;
+}
+
+/* ── La mitad del acceso ────────────────────────────────────────────────── */
+
+.ingreso__acceso {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--nci-space-6) var(--nci-space-5);
+}
+
+.ingreso__columna {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-5);
+  width: 100%;
+  max-width: 23rem;
+}
+
+/* Sólo en pantallas angostas, donde el panel de la izquierda no está. */
+.ingreso__logo {
+  display: none;
+  width: 100%;
+  max-width: 11rem;
+  height: auto;
+}
+
+/* El formulario ya está dentro de una columna acotada: no necesita marco
+   propio ni un segundo borde alrededor. */
+.ingreso {
+  gap: var(--nci-space-4);
+  max-width: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+@media (max-width: 60rem) {
+  .ingreso__marco {
+    grid-template-columns: 1fr;
+  }
+
+  /* El panel se va entero. Recortado a una franja no muestra la imagen ni
+     deja lugar al formulario: ocupa el espacio de las dos cosas. */
+  .ingreso__marca {
+    display: none;
+  }
+
+  /* La marca pasa acá: es lo que dice a dónde llegaste. */
+  .ingreso__logo {
+    display: block;
+  }
+
+  .ingreso__acceso {
+    align-items: flex-start;
+    padding-top: var(--nci-space-7);
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────
    Alta de cliente
-   
+
    Sobrio a propósito. Un formulario que se resuelve en dos campos no
    necesita más que espaciado y una jerarquía legible.
    ───────────────────────────────────────────────────────────── */
@@ -364,6 +1398,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--nci-space-4);
+  padding: var(--nci-space-5);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius-lg);
+  background: var(--nci-surface-raised);
 }
 
 .armar__cabecera {
@@ -372,6 +1410,16 @@
   align-items: flex-start;
   gap: var(--nci-space-3);
   flex-wrap: wrap;
+  padding-bottom: var(--nci-space-3);
+  border-bottom: 1px solid var(--nci-border);
+}
+
+.armar__cabecera h2 {
+  margin: var(--nci-space-1) 0 0;
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .armar__moneda {
@@ -385,8 +1433,8 @@
   gap: var(--nci-space-3);
   border: 1px solid var(--nci-border);
   border-radius: var(--nci-radius);
-  padding: var(--nci-space-3);
-  background: var(--nci-surface-raised);
+  padding: var(--nci-space-4);
+  background: var(--nci-surface);
 }
 
 .armar__campos {
@@ -410,12 +1458,19 @@
   gap: var(--nci-space-3);
   width: 100%;
   text-align: left;
-  padding: var(--nci-space-2);
+  padding: var(--nci-space-2) var(--nci-space-3);
   border: 1px solid var(--nci-border);
   border-radius: var(--nci-radius);
-  background: transparent;
+  background: var(--nci-surface-sunken);
+  color: inherit;
   cursor: pointer;
+  font: inherit;
   font-size: var(--nci-text-sm);
+  transition: border-color var(--nci-transition);
+}
+
+.armar__catalogo button:hover {
+  border-color: var(--nci-brand);
 }
 
 .armar__catalogo-precio {
@@ -437,20 +1492,33 @@
   border-bottom: 1px solid var(--nci-border);
 }
 
+/* Los importes en columna se comparan de un vistazo si están alineados. */
+.armar__renglones td:nth-child(n + 3),
+.armar__renglones th:nth-child(n + 3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .armar__renglones th {
   font-size: var(--nci-text-xs);
   color: var(--nci-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  font-weight: 600;
 }
 
 .armar__quitar {
   background: transparent;
   border: 0;
   color: var(--nci-text-muted);
+  font: inherit;
   font-size: var(--nci-text-xs);
   cursor: pointer;
   text-decoration: underline;
+}
+
+.armar__quitar:hover {
+  color: var(--nci-danger);
 }
 
 .armar__totales {
@@ -476,20 +1544,23 @@
 
 .armar__totales dd {
   margin: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .armar__total {
   border-top: 1px solid var(--nci-border);
   padding-top: var(--nci-space-1);
   font-weight: 600;
+  font-size: var(--nci-text-base);
 }
 
 .armar__falla,
 .armar__congelado {
   border: 1px solid var(--nci-border);
+  border-left: 3px solid var(--nci-state-attention);
   border-radius: var(--nci-radius);
-  padding: var(--nci-space-3);
-  background: var(--nci-surface-raised);
+  padding: var(--nci-space-3) var(--nci-space-4);
+  background: var(--nci-surface);
   font-size: var(--nci-text-sm);
 }
 
@@ -504,4 +1575,194 @@
 .armar__ayuda {
   color: var(--nci-text-muted);
   font-size: var(--nci-text-sm);
+}
+
+/* ── Enviar al cliente ──────────────────────────────────────────────────── */
+
+.enviar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-3);
+  padding: var(--nci-space-4);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius-lg);
+  background: var(--nci-surface-raised);
+}
+
+.enviar__accion {
+  display: flex;
+  gap: var(--nci-space-3);
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.enviar__canal {
+  max-width: 12rem;
+}
+
+.enviar__historial {
+  padding-top: var(--nci-space-3);
+  border-top: 1px solid var(--nci-border);
+  font-size: var(--nci-text-sm);
+}
+
+.enviar__historial ul {
+  list-style: none;
+  margin: var(--nci-space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-1);
+  color: var(--nci-text-muted);
+  font-size: var(--nci-text-xs);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Espacios y administración
+   ═════════════════════════════════════════════════════════════════════════ */
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: var(--nci-space-4);
+  align-items: start;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-2);
+  padding: var(--nci-space-4);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius-lg);
+  background: var(--nci-surface-raised);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color var(--nci-transition);
+}
+
+a.card:hover {
+  border-color: var(--nci-brand);
+}
+
+/* Un espacio al que todavía no se entra se ve distinto de uno disponible,
+   y además lo dice con palabras. */
+.card--pending {
+  border-style: dashed;
+  background: var(--nci-surface-sunken);
+}
+
+.card__title {
+  margin: 0;
+  font-family: 'Hanken Grotesk', var(--nci-font);
+  font-size: var(--nci-text-base);
+  font-weight: 600;
+}
+
+.card__text {
+  margin: 0;
+  font-size: var(--nci-text-sm);
+  color: var(--nci-text-muted);
+}
+
+.card__list {
+  list-style: none;
+  margin: var(--nci-space-1) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-1);
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+}
+
+.card__list li {
+  padding-left: var(--nci-space-3);
+  position: relative;
+}
+
+.card__list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55em;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--nci-text-faint);
+}
+
+.tag {
+  align-self: flex-start;
+  padding: 2px var(--nci-space-2);
+  border: 1px solid var(--nci-border-strong);
+  border-radius: var(--nci-radius-sm);
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   Pantallas angostas
+
+   El técnico consulta un procedimiento desde el teléfono, en obra. La barra
+   lateral desaparece y la navegación queda en la cabecera.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 60rem) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .shell__aside {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--nci-space-4);
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--nci-border);
+  }
+
+  .shell__aside .nav {
+    flex-direction: row;
+    flex: 1;
+  }
+
+  /* El logo se queda; el subtítulo del producto se va. En una fila de
+     iconos, "Intelligence" ocupa el ancho de dos secciones. */
+  .brand {
+    flex-shrink: 0;
+  }
+
+  .brand__logo {
+    max-width: 7.5rem;
+  }
+
+  .brand__product {
+    display: none;
+  }
+
+  .nav__group {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .nav__item span {
+    display: none;
+  }
+
+  .nav__item[aria-current='page'] span {
+    display: inline;
+  }
+
+  .shell__content {
+    padding: var(--nci-space-5) var(--nci-space-4) var(--nci-space-6);
+    gap: var(--nci-space-5);
+  }
+
+  .session__who {
+    display: none;
+  }
 }
