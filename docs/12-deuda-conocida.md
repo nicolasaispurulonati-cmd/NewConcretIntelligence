@@ -82,6 +82,26 @@ Llega también al asistente: `renderContext` (`packages/ai/src/retrieval.ts`) le
 
 ---
 
+## DT-006 · La política de identidad es una sola para los treinta tipos de entidad
+
+**Detectado:** 2026-08-06, al desambiguar el identificador de clientes homónimos (D-014).
+
+**Qué es:** `createEntity` (`packages/core/src/graph/entities.ts`) aplica la misma regla de identidad a los treinta tipos de entidad: el identificador legible es único dentro del tipo, y punto. D-014 decidió que cuando eso choca con un caso legítimo se desambigua numerando. **Pero no todos los tipos tienen el mismo caso legítimo.**
+
+Dos clientes con el mismo nombre son normales: dos sucursales, dos razones sociales parecidas, el mismo nombre en dos ciudades. Dos productos con el mismo nombre probablemente sean un error de carga, y numerar el segundo en silencio lo deja entrar. La desambiguación automática, que en clientes evita un bloqueo injusto, en productos podría estar tapando exactamente lo que habría que avisar.
+
+Si eso es así, la política de identidad no puede ser la misma para todos los tipos: tendría que ser una propiedad de cada tipo de entidad —desambiguar, rechazar, o preguntar— declarada donde hoy se declaran la clasificación y los nombres.
+
+**Por qué se pospone:** hoy el único tipo que se crea desde una pantalla es `customer`. Decidir una política por tipo sin más de un caso real es diseñar contra una hipótesis. Y el segundo caso no llegó todavía: por D-005, la unidad física serializada entra al modelo antes que Products.
+
+**Cuándo se resuelve:** al construir Products, que es el primer tipo donde el homónimo probablemente sea un error y no un hecho. Es el momento de decidirlo, con los dos casos a la vista. Antes de eso no hay con qué comparar.
+
+**Lo que no hay que hacer mientras tanto:** resolverlo por dominio. Si Products inventa su propia desambiguación en vez de decidir la política general, el sistema queda con dos formas distintas de tratar el mismo conflicto y nadie las unifica después, porque cada una parece razonable en su lugar. Es el motivo por el que D-014 registró la distinción entre la restricción del grafo y la respuesta del dominio.
+
+**Estado:** abierta
+
+---
+
 ## Cuándo una cosa va acá y cuándo se arregla en el momento
 
 Va acá lo que está mal, se entiende, y arreglarlo ahora costaría más que el daño que hace — porque depende de algo que todavía no existe, o porque el arreglo suelto contradice un diseño ya decidido. Se arregla en el momento lo que produce una creencia falsa en alguien que decide, lo que se puede corregir sin abrir otra discusión, y todo lo que sea una fuga de datos.

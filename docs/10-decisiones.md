@@ -246,6 +246,45 @@ El fundamento real es otro y no depende del motor: **las pruebas de integración
 
 ---
 
+## D-014 · La unicidad del identificador es del grafo, no del negocio
+
+**Fecha:** 2026-08-06 · **Estado:** vigente
+
+**Decisión:** se registran dos cosas, y la distinción entre ellas es lo que importa.
+
+1. **La unicidad del identificador legible por tipo de entidad es una restricción técnica del grafo, no una regla de negocio.** Ninguna decisión de producto declaró que no puedan existir dos entidades del mismo tipo con el mismo nombre. La restricción existe porque las URL de entidad son `/{tipo}/{identificador}` y un identificador tiene que resolver a una sola fila.
+2. **Cuando esa restricción choca con un caso legítimo, la respuesta es desambiguar el identificador, nunca rechazar el alta.** El primero se queda con el identificador limpio, los siguientes llevan un número. El nombre visible no se toca.
+
+**Motivo:** la restricción se descubrió porque chocó con la primera pantalla que escribe. `createEntity` hace `onConflictDoNothing` sobre `(type, slug)` y, cuando no inserta, lanza `Ya existe cliente con ese nombre` (`packages/core/src/graph/entities.ts`). Ese mensaje es el problema: **suena a política comercial y es una consecuencia de la clave única**. Alguien que lo lea va a creer que el negocio decidió no admitir clientes homónimos, cuando lo que pasó es que el grafo impuso una regla de identidad sobre los doce dominios a la vez sin que nadie la eligiera.
+
+Y en clientes el caso legítimo es común: dos sucursales, dos razones sociales parecidas, el mismo nombre en dos ciudades. Bloquearlo es exactamente el bloqueo que la detección de duplicados existe para no hacer — se sugiere mientras se escribe, y la decisión es de quien carga, que sabe cosas que el sistema no.
+
+**Por qué se registra la distinción y no sólo la solución:** sin ella, el próximo dominio que choque con lo mismo va a inventar su propia desambiguación, y el sistema va a tener tres formas distintas de resolver el mismo conflicto. Es la clase de divergencia que después nadie unifica porque cada una parece razonable en su lugar.
+
+**Consecuencias:** habilita registrar homónimos sin perder la URL estable. Cuesta que el identificador y el nombre puedan diferir, así que **el identificador no se muestra como si fuera el nombre en ninguna parte**. Deja abierta la pregunta de si la política de identidad puede ser la misma para todos los tipos de entidad, que es [DT-006](12-deuda-conocida.md).
+
+**Evidencia:** `slugDisponible` en `packages/crm/src/customers.ts`; la prueba `numera el identificador y deja el nombre intacto` en `packages/crm/src/customers.integration.test.ts`, que crea tres homónimos y verifica los tres identificadores.
+
+---
+
+## D-015 · La validación se parte por lo que necesita saber, no por dónde corre
+
+**Fecha:** 2026-08-06 · **Estado:** vigente
+
+**Decisión:** en `@nci/domain` va todo lo que se puede decidir mirando únicamente el dato que se tiene delante. En el paquete del dominio —`@nci/crm`, `@nci/sales`— va todo lo que requiere consultar el estado del mundo. El criterio es reutilizable y se aplica en cada dominio nuevo.
+
+**Motivo:** `@nci/domain` es el único paquete que puede viajar al navegador sin arrastrar la base, así que es el único lugar desde donde el cliente y el servidor pueden ejecutar **literalmente las mismas reglas**, no dos copias que se parecen. Duplicar validación es una de las formas más comunes de que un sistema mienta: el navegador dice que sí a algo que el servidor rechaza, o al revés, y la diferencia aparece recién frente a un usuario. Poner las reglas puras en el único lugar compartido no lo hace improbable, lo hace imposible.
+
+La partición no es "front y back". Es qué necesita saber la regla para responder. Que un nombre tenga al menos dos caracteres, que haga falta al menos un canal de contacto, que un plazo esté entre 0 y 365, que dos nombres se parezcan lo bastante como para sospechar: todo eso se responde con el dato. Si ya existe un cliente parecido, si el identificador está libre, si quien pregunta puede crear: nada de eso.
+
+**La consecuencia que hay que sostener:** el servidor **vuelve a ejecutar** las reglas puras, no confía en que el navegador ya las corrió. La validación compartida es para que el usuario se entere antes, no para ahorrarse la comprobación. `createCustomer` llama a `validateCustomer` como primera cosa después de la capacidad.
+
+**Consecuencias:** habilita que un cambio de regla llegue a las dos puntas en el mismo commit. Cierra la posibilidad de que una regla pura viva en un componente. Cuesta que `@nci/domain` no pueda importar nada con base — que es lo que la hace útil, y es la misma restricción que D-002 pone sobre `@nci/ai`, por la misma clase de motivo.
+
+**Evidencia:** `packages/domain/src/customer.ts` (`validateCustomer`, `looksLikeSameCustomer`) con sus pruebas; `packages/crm/src/customers.ts` (`findSimilarCustomers`, `slugDisponible`); `apps/web/src/components/alta-de-cliente.tsx`, que importa las mismas funciones que ejecuta el servidor.
+
+---
+
 ## Cómo se agrega una entrada
 
 Se numera con el siguiente `D-00N` disponible, se agrega al final, y no se toca ninguna de las anteriores salvo para marcarlas como supersedidas por la nueva. Una entrada puede quedar supersedida en parte: cuando pasa, se dice qué parte, para que nadie tenga que deducir si el resto sigue en pie.

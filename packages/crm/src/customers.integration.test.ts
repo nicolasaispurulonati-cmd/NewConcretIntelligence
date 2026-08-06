@@ -11,7 +11,7 @@ import { after, before, describe, it } from 'node:test';
 
 import { inArray } from 'drizzle-orm';
 
-import { Actor, ValidationError, resolveCapabilities, type Scope } from '@nci/core';
+import { Actor, ValidationError, resolveCapabilities, slugify, type Scope } from '@nci/core';
 import { createDatabase, entities, requireDatabaseUrl, users, type Database } from '@nci/db';
 import { ROLES } from '@nci/domain';
 
@@ -136,6 +136,30 @@ describe('Duplicados: se sugieren, no se impiden', () => {
     const segundo = await alta({ legalName: `Duplicado Permitido ${marca}`, phone: '342' });
 
     assert.notEqual(primero.entity.id, segundo.entity.id);
+  });
+
+  it('numera el identificador y deja el nombre intacto', async () => {
+    // La restricción es del grafo, no del negocio: `createEntity` exige que el
+    // identificador legible sea único por tipo (D-014). Este caso se encontró a
+    // mano y por eso queda escrito acá: el tercero es el que rompe una
+    // desambiguación que sólo contempla al segundo.
+    const nombre = `Sucursal Repetida ${marca}`;
+    const base = slugify(nombre);
+
+    const uno = await alta({ legalName: nombre, phone: '341' });
+    const dos = await alta({ legalName: nombre, phone: '342' });
+    const tres = await alta({ legalName: nombre, phone: '343' });
+
+    assert.deepEqual(
+      [uno.entity.slug, dos.entity.slug, tres.entity.slug],
+      [base, `${base}-2`, `${base}-3`],
+    );
+
+    // El número está en el identificador, no en el dato. Quien mire la lista ve
+    // tres veces el mismo nombre, que es lo que efectivamente pasa.
+    for (const cliente of [uno, dos, tres]) {
+      assert.equal(cliente.entity.displayName, nombre);
+    }
   });
 
   it('con un nombre nuevo no sugiere nada', async () => {
