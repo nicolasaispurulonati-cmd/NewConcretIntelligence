@@ -94,9 +94,31 @@ Si eso es así, la política de identidad no puede ser la misma para todos los t
 
 **Por qué se pospone:** hoy el único tipo que se crea desde una pantalla es `customer`. Decidir una política por tipo sin más de un caso real es diseñar contra una hipótesis. Y el segundo caso no llegó todavía: por D-005, la unidad física serializada entra al modelo antes que Products.
 
-**Cuándo se resuelve:** al construir Products, que es el primer tipo donde el homónimo probablemente sea un error y no un hecho. Es el momento de decidirlo, con los dos casos a la vista. Antes de eso no hay con qué comparar.
+**Cuándo se resuelve:** al construir Products, que es el primer tipo donde el homónimo probablemente sea un error y no un hecho. Es el momento de decidirlo, con los dos casos a la vista. Antes de eso no hay con qué comparar. **Se decide junto con [DT-007](#dt-007--los-estados-de-cada-tipo-no-los-puede-garantizar-la-base)**, que es el mismo problema visto desde el otro extremo: la tabla genérica imponiendo de más en identidad y de menos en estados.
 
 **Lo que no hay que hacer mientras tanto:** resolverlo por dominio. Si Products inventa su propia desambiguación en vez de decidir la política general, el sistema queda con dos formas distintas de tratar el mismo conflicto y nadie las unifica después, porque cada una parece razonable en su lugar. Es el motivo por el que D-014 registró la distinción entre la restricción del grafo y la respuesta del dominio.
+
+**Estado:** abierta
+
+---
+
+## DT-007 · Los estados de cada tipo no los puede garantizar la base
+
+**Detectado:** 2026-08-06, al agregar el estado `emitido` (D-016). Es la segunda cara de [DT-006](#dt-006--la-política-de-identidad-es-una-sola-para-los-treinta-tipos-de-entidad) y se decide con ella.
+
+**Qué es:** `QUOTE_STATUSES` (`packages/db/src/schema/sales.ts`) declara los seis estados de un presupuesto, y **ninguna restricción de la base los sostiene**. No es un olvido: el estado vive en `entities.status`, una columna de texto compartida por los treinta tipos de entidad. Una restricción ahí tendría que enumerar los estados válidos de los treinta tipos a la vez, y cambiaría cada vez que cualquier dominio agrega uno.
+
+El comentario del esquema decía que se validaban en la base. Ya está corregido y ahora dice quién sostiene la regla de verdad: `TRANSITIONS`, en `packages/sales/src/quotes.ts`.
+
+**Por qué importa más de lo que parece:** las transiciones cerradas del presupuesto están entre las reglas más fuertes del sistema — un presupuesto emitido no se edita, uno aceptado no se rechaza. Todas se sostienen en un solo lugar del código. **Cualquier escritura que no pase por `@nci/sales` puede dejar un presupuesto en un estado que no existe**, y nada lo detendría ni lo avisaría. Hoy no hay ninguna: el único camino de escritura es el dominio. Por eso se registra en vez de arreglarse.
+
+**Por qué es la misma familia que DT-006, y por qué se deciden juntas:** las dos salen de lo mismo — una tabla genérica que impone lo mismo a todos los dominios, o que no impone nada, cuando cada dominio necesita algo distinto. En identidad, el grafo impone de más: obliga a que no haya homónimos donde los homónimos son legítimos. En estados, impone de menos: no puede garantizar ninguno porque tendría que garantizarlos todos. Es el mismo eje visto desde los dos extremos.
+
+Dos apariciones en dos sesiones, por caminos que no tenían nada que ver entre sí, es un patrón y no una coincidencia. Y la solución probablemente sea una sola: que el tipo de entidad declare lo que le es propio —su política de identidad, sus estados válidos— donde hoy declara su clasificación y sus nombres. Decidir una sin la otra deja el mecanismo hecho a medias, y la segunda vez el costo de rehacerlo ya está pagado.
+
+**Cuándo se resuelve:** con DT-006, al construir Products. **No se da por cerrada esa decisión sin haber decidido también qué pasa con los estados**, aunque la respuesta sea dejarlos donde están.
+
+**Lo que no hay que hacer mientras tanto:** agregar una restricción a `entities.status` que enumere los estados de un solo tipo. Quedaría incompleta desde el día uno y habría que tocarla cada vez que cualquier dominio agrega un estado, que es la forma más segura de que alguien la borre.
 
 **Estado:** abierta
 

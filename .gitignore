@@ -57,3 +57,6 @@ Thumbs.db
 *.docx
 *.pptx
 docs/product/
+
+# Ajustes locales de Claude Code: son de cada maquina, no del proyecto.
+.claude/settings.local.json
