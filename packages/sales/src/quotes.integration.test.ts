@@ -11,7 +11,7 @@ import { after, before, describe, it } from 'node:test';
 
 import { Actor, ValidationError, createEntity, resolveCapabilities, type Scope } from '@nci/core';
 import { createDatabase, customers, entities, requireDatabaseUrl, users, type Database } from '@nci/db';
-import { ROLES } from '@nci/domain';
+import { QUOTE_VALIDITY_DAYS, ROLES, validUntilFrom } from '@nci/domain';
 import { eq, inArray } from 'drizzle-orm';
 
 import {
@@ -236,6 +236,40 @@ describe('Emitido y enviado son dos hechos distintos', () => {
     assert.deepEqual(enviado.issuedAt, emitido.issuedAt, 'la emisión no se pisa al enviar');
     assert.ok(enviado.sentAt, 'y ahora sí hay fecha de envío');
     assert.equal(enviado.sentVia, 'whatsapp');
+  });
+
+  it('emitir fija hasta cuándo vale', async () => {
+    // Hasta D-017 esta columna no la completaba nadie: el estado `vencido` era
+    // inalcanzable y el documento no podía declarar su validez.
+    const emitido = await issueQuote(scope, (await conRenglon('validez')).entity.id);
+
+    assert.ok(emitido.validUntil, 'tiene que quedar una fecha');
+    assert.equal(emitido.validUntil, validUntilFrom(emitido.issuedAt!));
+
+    // Y son treinta días contados de verdad, no un texto cualquiera.
+    const dias = Math.round(
+      (new Date(`${emitido.validUntil}T00:00:00`).getTime() -
+        new Date(
+          emitido.issuedAt!.getFullYear(),
+          emitido.issuedAt!.getMonth(),
+          emitido.issuedAt!.getDate(),
+        ).getTime()) /
+        86_400_000,
+    );
+    assert.equal(dias, QUOTE_VALIDITY_DAYS);
+  });
+
+  it('una versión nueva no hereda la validez de la anterior', async () => {
+    // Copiarla haría que la versión nueva naciera vencida cuando se versiona
+    // un presupuesto viejo, que es justo cuando más se versiona.
+    const emitido = await issueQuote(scope, (await conRenglon('hereda')).entity.id);
+    assert.ok(emitido.validUntil);
+
+    const segunda = anotar(await createNewVersion(scope, emitido.entity.id));
+    assert.equal(segunda.validUntil, null, 'nace como borrador, sin validez');
+
+    const reemitida = await issueQuote(scope, segunda.entity.id);
+    assert.ok(reemitida.validUntil, 'y la fija al emitirse');
   });
 
   it('no se emite un presupuesto vacío', async () => {

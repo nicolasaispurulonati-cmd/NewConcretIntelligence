@@ -23,6 +23,7 @@
     "@nci/core": "*",
     "@nci/db": "*",
     "@nci/domain": "*",
-    "drizzle-orm": "^0.44.5"
+    "drizzle-orm": "^0.44.5",
+    "@nci/documents": "*"
   }
 }

@@ -4,7 +4,14 @@
     "rootDir": "./src",
     "outDir": "./dist"
   },
-  "references": [{ "path": "../domain" }, { "path": "../db" }, { "path": "../core" }],
+  "references": [
+    { "path": "../domain" },
+    { "path": "../db" },
+    { "path": "../core" },
+    // Sólo por el tipo de la entrada del documento. Ventas arma esos datos;
+    // dibujarlos es de @nci/documents, que no puede volver a consultarlos.
+    { "path": "../documents" }
+  ],
   "include": ["src/**/*"],
   "exclude": ["src/**/*.test.ts"]
 }

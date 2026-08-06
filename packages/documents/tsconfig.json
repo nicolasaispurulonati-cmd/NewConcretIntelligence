@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist"
+  },
+  // Sólo el lenguaje del negocio. El documento no conoce la base, ni ventas, ni
+  // el catálogo: recibe datos ya congelados y los dibuja. Que no pueda leer un
+  // precio actual es la garantía de que no lo va a leer.
+  "references": [{ "path": "../domain" }],
+  "include": ["src/**/*"],
+  "exclude": ["src/**/*.test.ts"]
+}

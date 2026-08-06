@@ -124,6 +124,24 @@ Dos apariciones en dos sesiones, por caminos que no tenían nada que ver entre s
 
 ---
 
+## DT-008 · Nadie vence los presupuestos
+
+**Detectado:** 2026-08-06, al darle fecha de validez al presupuesto (D-017).
+
+**Qué es:** desde D-017 todo presupuesto emitido guarda hasta cuándo vale, y el documento lo declara. Pero **nada recorre los presupuestos y los marca como vencidos**. `vencido` sigue siendo un estado que existe en `QUOTE_STATUSES` y en `TRANSITIONS` y al que ninguna función del sistema lleva.
+
+La diferencia con antes no es cosmética: antes el estado era inalcanzable porque faltaba el dato, y ahora el dato está. Lo que falta es quién lo mire. Mientras tanto, un presupuesto de hace tres meses sigue contando como abierto en el indicador de comprometido, y el vendedor lo ve en la lista de seguimientos como si todavía esperara respuesta.
+
+**Por qué se pospone:** vencer presupuestos es una escritura que ocurre sin que nadie la pida, y eso abre una pregunta que esta sección no tiene por qué responder: dónde corre. Una tarea programada, una comprobación al leer, o un disparador en la base son tres respuestas distintas con consecuencias distintas para el despliegue — y todavía no hay despliegue. Elegir ahora sería elegir a ciegas.
+
+**El desvío que hay que evitar:** calcular el vencimiento al vuelo cada vez que se lee. Es tentador porque no necesita nada, y produce que el estado que se muestra y el estado que está guardado digan cosas distintas. Eso es peor que el problema: el indicador diría una cosa y la base otra, y el día que alguien consulte por SQL no va a entender nada.
+
+**Cuándo se resuelve:** cuando exista el despliegue y se sepa qué mecanismos periódicos hay disponibles.
+
+**Estado:** abierta
+
+---
+
 ## Cuándo una cosa va acá y cuándo se arregla en el momento
 
 Va acá lo que está mal, se entiende, y arreglarlo ahora costaría más que el daño que hace — porque depende de algo que todavía no existe, o porque el arreglo suelto contradice un diseño ya decidido. Se arregla en el momento lo que produce una creencia falsa en alguien que decide, lo que se puede corregir sin abrir otra discusión, y todo lo que sea una fuga de datos.

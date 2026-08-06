@@ -22,6 +22,7 @@ import {
   type Scope,
 } from '@nci/core';
 import { customers, entities, quoteItems, quotes } from '@nci/db';
+import { validUntilFrom } from '@nci/domain';
 
 import { calculateLine, calculateQuote, formatMoney, type Cents } from './money.js';
 
@@ -335,7 +336,7 @@ export async function issueQuote(scope: Scope, quoteId: string): Promise<Quote> 
     });
   }
 
-  const customerId = await customerOf(scope, quoteId);
+  const customerId = await customerOfQuote(scope, quoteId);
   const customer = customerId ? await getEntity(scope, customerId) : null;
   const commercial = customerId ? await commercialTerms(scope, customerId) : null;
   const plazo = commercial?.paymentTermsDays ?? quote.paymentTermsDays;
@@ -357,9 +358,19 @@ export async function issueQuote(scope: Scope, quoteId: string): Promise<Quote> 
     });
   }
 
+  // La validez se fija al emitir y no al crear el borrador, por el mismo
+  // motivo que el plazo de pago: lo que se congela es lo que vale cuando el
+  // documento se cierra. Un borrador de hace tres semanas que se emite hoy
+  // vale treinta días desde hoy. Ver D-017.
+  const emitidoEn = new Date();
+
   await scope.db
     .update(quotes)
-    .set({ issuedAt: new Date(), paymentTermsDays: plazo })
+    .set({
+      issuedAt: emitidoEn,
+      paymentTermsDays: plazo,
+      validUntil: quote.validUntil ?? validUntilFrom(emitidoEn),
+    })
     .where(eq(quotes.entityId, quoteId));
 
   await updateEntity(scope, quoteId, { status: 'emitido' });
@@ -476,7 +487,7 @@ export async function createNewVersion(scope: Scope, quoteId: string): Promise<Q
   scope.actor.assertCanActOn('quote', 'create');
   const previous = await loadQuote(scope, quoteId);
 
-  const customer = await customerOf(scope, quoteId);
+  const customer = await customerOfQuote(scope, quoteId);
   const number = previous.number;
   const version = previous.version + 1;
 
@@ -494,7 +505,10 @@ export async function createNewVersion(scope: Scope, quoteId: string): Promise<Q
     number,
     version,
     currency: previous.currency,
-    validUntil: previous.validUntil,
+    // La validez no se hereda: la versión nueva es un borrador y va a fijar la
+    // suya al emitirse. Copiarla haría que naciera vencida cuando se versiona
+    // un presupuesto viejo, que es justamente cuando más se versiona.
+    validUntil: null,
     paymentTermsDays: previous.paymentTermsDays,
     notes: previous.notes,
     ownerId: scope.actor.id,
@@ -723,7 +737,7 @@ async function commercialTerms(
 }
 
 /** El cliente al que se le emitió, según el grafo. */
-async function customerOf(scope: Scope, quoteId: string): Promise<string | null> {
+export async function customerOfQuote(scope: Scope, quoteId: string): Promise<string | null> {
   const [row] = await scope.db
     .select({ id: entities.id })
     .from(entities)

@@ -15,6 +15,7 @@
     { "path": "./packages/core" },
     { "path": "./packages/crm" },
     { "path": "./packages/design" },
+    { "path": "./packages/documents" },
     { "path": "./packages/ai" },
     { "path": "./packages/sales" }
   ]

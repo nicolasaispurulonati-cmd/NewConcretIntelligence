@@ -325,6 +325,42 @@ La alternativa que se propuso primero era renombrar `enviado` a `emitido`. Se re
 
 ---
 
+## D-017 · Un presupuesto vale treinta días, y el plazo es de la empresa
+
+**Fecha:** 2026-08-06 · **Estado:** vigente
+
+**Decisión:** un presupuesto vale **treinta días desde que se emite**. Es un plazo único de NewConcret y no lo elige el vendedor presupuesto por presupuesto. Se calcula y se guarda al emitir, junto con la condición de pago y por el mismo motivo: lo que se congela es lo que vale cuando el documento se cierra.
+
+**Motivo:** la columna `valid_until` existía en el esquema desde el primer día y **nadie la completaba nunca**. Eso tenía dos consecuencias que sólo se vieron cuando el primer documento salió hacia afuera. La primera: el estado `vencido` era inalcanzable — está en `QUOTE_STATUSES` y en `TRANSITIONS`, y ninguna función del sistema lo asigna, porque no había con qué decidir cuándo. La segunda, más grave: el documento no podía declarar hasta cuándo valía lo que prometía, y **un presupuesto sin fecha de vencimiento es una promesa abierta**. El cliente que lo acepta seis meses después tiene razón en reclamar el precio, porque el papel nunca dijo lo contrario.
+
+La alternativa descartada era que el vendedor eligiera el plazo en cada presupuesto. Da flexibilidad y trae el riesgo de que quede vacío, con lo cual el documento vuelve a no poder decir nada y estamos en el mismo lugar. Si algún día hace falta la excepción —un precio de importación que se sostiene una semana— la forma de agregarla es un plazo por presupuesto que tenga a éste como valor por defecto, no reemplazarlo.
+
+**Consecuencias:** habilita que el documento declare su validez, y deja el estado `vencido` alcanzable por primera vez. **No lo alcanza todavía:** nadie vence los presupuestos. Hace falta algo que los recorra y los marque, y eso no es parte de esta sección — queda anotado en [`docs/12`](12-deuda-conocida.md) como DT-008. Cierra la posibilidad de emitir sin fecha de validez. Cuesta que los presupuestos emitidos antes de esta decisión tengan `validUntil` en nulo para siempre; el documento lo dice con esas palabras en lugar de inventar una fecha.
+
+**Un detalle que no es un detalle:** la fecha se calcula sobre la hora local y no sobre UTC. Un presupuesto emitido a las 21 de Buenos Aires ya es del día siguiente en UTC, y el documento prometería un día más del que el vendedor entiende que dio.
+
+**Evidencia:** `QUOTE_VALIDITY_DAYS` y `validUntilFrom` en `packages/domain/src/quote-validity.ts`, con sus pruebas; `issueQuote` en `packages/sales/src/quotes.ts`. Vive en `@nci/domain` porque es una regla del negocio: cambiarla cambia lo que NewConcret le promete a un cliente, y eso se revisa en un diff.
+
+---
+
+## D-018 · La identidad de NewConcret vive en el entorno
+
+**Fecha:** 2026-08-06 · **Estado:** vigente
+
+**Decisión:** la razón social, el CUIT, el domicilio, el teléfono y el correo de NewConcret se leen de variables de entorno. No hay valores por defecto: si falta alguna, la generación del documento falla y enumera todas las que faltan.
+
+**Motivo:** hasta que el primer artefacto salió hacia un cliente, NewConcret no existía como dato en ninguna parte del sistema. La auditoría no lo marcó porque no faltaba para nada de lo que había.
+
+De las tres ubicaciones posibles, el entorno es la que paga menos por lo que da. Una entidad en el grafo sería coherente con el modelo y exigiría migración, pantalla de administración y permisos para algo que cambia una vez por año. Constantes en `@nci/domain` serían revisables en el diff, pero la identidad de la empresa no es lenguaje del dominio, y cambiar un teléfono obligaría a un despliegue. El entorno se configura una vez por despliegue y no arrastra nada.
+
+**Lo que se paga y hay que saber:** no queda versionada y no hay historial de quién cambió qué. Es aceptable para cinco valores que casi no cambian, y deja de serlo el día que la identidad tenga que variar por sucursal o por unidad de negocio. Ése es el momento de mudarla al grafo, no antes.
+
+**Por qué ningún valor por defecto:** un documento que sale con un CUIT inventado es peor que un documento que no sale. El segundo se arregla en cinco minutos; el primero ya está en el teléfono de un cliente. El error enumera todas las variables faltantes de una vez, para que quien configura el despliegue las cargue en una pasada en lugar de descubrirlas de a una.
+
+**Evidencia:** `companyFromEnv` en `packages/documents/src/company.ts` con sus pruebas, y el bloque de identidad en `.env.example`, sin valores.
+
+---
+
 ## Cómo se agrega una entrada
 
 Se numera con el siguiente `D-00N` disponible, se agrega al final, y no se toca ninguna de las anteriores salvo para marcarlas como supersedidas por la nueva. Una entrada puede quedar supersedida en parte: cuando pasa, se dice qué parte, para que nadie tenga que deducir si el resto sigue en pie.

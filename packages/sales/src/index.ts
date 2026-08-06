@@ -7,3 +7,4 @@
 
 export * from './money.js';
 export * from './quotes.js';
+export * from './quote-document-data.js';
