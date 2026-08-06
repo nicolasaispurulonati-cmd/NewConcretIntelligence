@@ -13,6 +13,8 @@ dist/
 build/
 out/
 .next/
+# Directorios de verificacion: un build que no le pisa el runtime al dev server.
+.next-*/
 .turbo/
 coverage/
 *.tsbuildinfo
