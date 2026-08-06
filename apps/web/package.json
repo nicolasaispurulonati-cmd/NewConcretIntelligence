@@ -12,18 +12,23 @@
   },
   "dependencies": {
     "@nci/ai": "*",
+    "@nci/catalog": "*",
     "@nci/core": "*",
+    "@nci/crm": "*",
     "@nci/db": "*",
     "@nci/design": "*",
     "@nci/domain": "*",
+    "@nci/sales": "*",
     "next": "^15.5.4",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "server-only": "^0.0.1",
-    "@nci/sales": "*"
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "^19.1.9",
-    "@types/react-dom": "^19.1.7"
+    "@types/react-dom": "^19.1.7",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^4.3.3"
   }
 }
