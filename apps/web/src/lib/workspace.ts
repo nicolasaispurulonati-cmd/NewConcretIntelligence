@@ -23,11 +23,30 @@ import {
   type OpenQuoteTotals,
 } from '@nci/sales';
 
+/**
+ * Una fila de widget.
+ *
+ * `href` no es decoración. Un escritorio que enumera lo que hay que hacer y
+ * no deja llegar a ninguna de esas cosas obliga a buscar de nuevo por nombre
+ * lo que el sistema acaba de mostrar. La consulta ya trae el slug; lo que
+ * faltaba era no descartarlo.
+ */
+export interface WidgetLineData {
+  readonly primary: string;
+  readonly secondary: string;
+  /** A dónde lleva. Ausente cuando la fila no representa una entidad. */
+  readonly href?: string;
+  /** Quién y de dónde. Principio 10: el tiempo y el autor son visibles. */
+  readonly meta?: string;
+  /** La acción concreta que resuelve esta fila, cuando el dato la trae. */
+  readonly action?: { readonly label: string; readonly href: string };
+}
+
 export interface WidgetRenderable {
   readonly id: string;
   readonly title: string;
   readonly metric?: Metric;
-  readonly lines?: readonly { readonly primary: string; readonly secondary: string }[];
+  readonly lines?: readonly WidgetLineData[];
   /**
    * Cuántos elementos existen más allá de los que se listan.
    *
@@ -97,6 +116,8 @@ const REGISTRY: Record<string, WidgetLoader> = {
       lines: rows.map((row) => ({
         primary: `${row.number}${row.version > 1 ? ` v${row.version}` : ''} · ${row.customer ?? 'sin cliente'}`,
         secondary: describeQuote(row.status, row.sentAt, row.total, row.currency),
+        // Un borrador se sigue armando; lo demás ya está cerrado y se consulta.
+        href: row.status === 'borrador' ? `/presupuesto/${row.slug}` : `/e/quote/${row.slug}`,
       })),
       emptyMessage:
         'Todavía no creaste presupuestos. Se crean desde la ficha del cliente, o con Ctrl+K.',
@@ -124,6 +145,7 @@ const REGISTRY: Record<string, WidgetLoader> = {
           total: quotes.total,
           currency: quotes.currency,
           sentAt: quotes.sentAt,
+          slug: entities.slug,
         })
         .from(quotes)
         .innerJoin(entities, eq(entities.id, quotes.entityId))
@@ -146,8 +168,9 @@ const REGISTRY: Record<string, WidgetLoader> = {
       lines: rows.map((row) => ({
         primary: `${row.customer ?? 'Cliente'} · ${row.number}`,
         secondary: row.sentAt
-          ? `${formatMoney(row.total, row.currency)} · enviado ${formatRelativeTime(row.sentAt)}`
+          ? `${formatMoney(row.total, row.currency)} · enviado ${formatRelativeTime(row.sentAt).toLowerCase()}`
           : formatMoney(row.total, row.currency),
+        href: `/e/quote/${row.slug}`,
       })),
       emptyMessage: 'No hay presupuestos esperando respuesta.',
     };
@@ -155,23 +178,14 @@ const REGISTRY: Record<string, WidgetLoader> = {
 
   /** Lo que pasó en la empresa, en el orden en que pasó. */
   'activity.feed': async (scope) => {
-    const events = await scope.db
-      .select({
-        id: activity.id,
-        summary: activity.summary,
-        occurredAt: activity.occurredAt,
-      })
-      .from(activity)
-      .orderBy(desc(activity.occurredAt))
-      .limit(LISTA_MAXIMA);
+    const events = await recentActivity(scope);
 
     return {
       id: 'activity.feed',
       title: 'Actividad de la empresa',
-      lines: events.map((event) => ({
-        primary: event.summary,
-        secondary: formatRelativeTime(event.occurredAt),
-      })),
+      // Acá el autor importa: es actividad de todos, y "se emitió P-2026-0007"
+      // sin decir quién lo emitió es la mitad del hecho.
+      lines: events.map((event) => comoLinea(event, { conAutor: true })),
       emptyMessage:
         'Todavía no hay actividad registrada. Aparecerá acá en cuanto alguien cree o modifique algo.',
     };
@@ -179,24 +193,13 @@ const REGISTRY: Record<string, WidgetLoader> = {
 
   /** Lo que hizo esta persona. Su propia línea de tiempo. */
   'activity.mine': async (scope) => {
-    const events = await scope.db
-      .select({
-        id: activity.id,
-        summary: activity.summary,
-        occurredAt: activity.occurredAt,
-      })
-      .from(activity)
-      .where(eq(activity.actorId, scope.actor.id))
-      .orderBy(desc(activity.occurredAt))
-      .limit(LISTA_MAXIMA);
+    const events = await recentActivity(scope, scope.actor.id);
 
     return {
       id: 'activity.mine',
       title: 'Tu actividad reciente',
-      lines: events.map((event) => ({
-        primary: event.summary,
-        secondary: formatRelativeTime(event.occurredAt),
-      })),
+      // Acá no: el autor sos vos en todas las filas, y repetirlo es ruido.
+      lines: events.map((event) => comoLinea(event, { conAutor: false })),
       emptyMessage: 'Todavía no registraste actividad en la plataforma.',
     };
   },
@@ -208,6 +211,9 @@ const REGISTRY: Record<string, WidgetLoader> = {
         id: notifications.id,
         title: notifications.title,
         reason: notifications.reason,
+        actionLabel: notifications.actionLabel,
+        actionHref: notifications.actionHref,
+        createdAt: notifications.createdAt,
       })
       .from(notifications)
       .where(and(eq(notifications.userId, scope.actor.id), isNull(notifications.readAt)))
@@ -217,11 +223,91 @@ const REGISTRY: Record<string, WidgetLoader> = {
     return {
       id: 'notifications.important',
       title: 'Requiere tu atención',
-      lines: pending.map((item) => ({ primary: item.title, secondary: item.reason })),
+      lines: pending.map((item) => ({
+        primary: item.title,
+        secondary: item.reason,
+        meta: formatRelativeTime(item.createdAt),
+        // "Sin acción posible no hay notificación", dice el esquema. La
+        // pantalla no mostraba ninguna: avisaba de algo y dejaba a la persona
+        // averiguando por su cuenta dónde se resolvía.
+        ...(item.actionLabel && item.actionHref
+          ? { action: { label: item.actionLabel, href: item.actionHref } }
+          : {}),
+      })),
       emptyMessage: 'No hay nada pendiente que requiera tu atención.',
     };
   },
 };
+
+/**
+ * Los últimos hechos registrados, con su entidad.
+ *
+ * El join trae tipo y slug para poder llegar a lo que el hecho menciona. Sin
+ * él, el escritorio cuenta que algo pasó y obliga a buscarlo por nombre.
+ */
+async function recentActivity(
+  scope: Scope,
+  actorId?: string,
+): Promise<
+  readonly {
+    summary: string;
+    occurredAt: Date;
+    actorName: string;
+    source: string;
+    sourceSystem: string | null;
+    type: string | null;
+    slug: string | null;
+  }[]
+> {
+  const base = scope.db
+    .select({
+      summary: activity.summary,
+      occurredAt: activity.occurredAt,
+      actorName: activity.actorName,
+      source: activity.source,
+      sourceSystem: activity.sourceSystem,
+      type: entities.type,
+      slug: entities.slug,
+    })
+    .from(activity)
+    .leftJoin(entities, eq(entities.id, activity.entityId));
+
+  return actorId
+    ? base.where(eq(activity.actorId, actorId)).orderBy(desc(activity.occurredAt)).limit(LISTA_MAXIMA)
+    : base.orderBy(desc(activity.occurredAt)).limit(LISTA_MAXIMA);
+}
+
+/** Un hecho, dicho como lo lee una persona. */
+function comoLinea(
+  event: {
+    summary: string;
+    occurredAt: Date;
+    actorName: string;
+    source: string;
+    sourceSystem: string | null;
+    type: string | null;
+    slug: string | null;
+  },
+  opciones: { conAutor: boolean },
+): WidgetLineData {
+  // De dónde salió el hecho. Principio 14: lo que hizo la IA se distingue de
+  // lo que hizo una persona, y de lo que llegó de otro sistema.
+  const procedencia =
+    event.source === 'ai'
+      ? 'IA'
+      : event.source === 'integration'
+        ? (event.sourceSystem ?? 'Integración')
+        : opciones.conAutor
+          ? event.actorName
+          : null;
+
+  return {
+    primary: event.summary,
+    secondary: formatRelativeTime(event.occurredAt),
+    ...(procedencia ? { meta: procedencia } : {}),
+    ...(event.type && event.slug ? { href: `/e/${event.type}/${event.slug}` } : {}),
+  };
+}
 
 export interface WorkspaceLayout {
   readonly widgets: readonly WidgetRenderable[];

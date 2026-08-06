@@ -167,8 +167,7 @@ export function ArmarPresupuesto({
 
       {presupuesto.status === 'emitido' && (
         <p className="armar__ayuda">
-          Emitido. Falta hacérselo llegar al cliente, que es un paso aparte y todavía no está
-          construido.
+          Emitido. Lo que dice ya no cambia, y por eso puede salir. Abajo está el envío.
         </p>
       )}
     </div>
@@ -231,7 +230,6 @@ function AgregarRenglon({
       <label className="alta__campo">
         <span className="font-label-caps">Producto o servicio</span>
         <input
-          className="palette__input"
           value={borrador.descripcion}
           placeholder="Buscá en el catálogo, o escribí un renglón libre"
           onChange={(evento) =>
@@ -430,7 +428,6 @@ function Campo({
     <label className="alta__campo">
       <span className="font-label-caps">{etiqueta}</span>
       <input
-        className="palette__input"
         value={valor}
         onChange={(evento) => onCambio(evento.target.value)}
       />

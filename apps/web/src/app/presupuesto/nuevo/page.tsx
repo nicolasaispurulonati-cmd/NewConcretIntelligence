@@ -23,10 +23,12 @@ export default async function NuevoPresupuestoPage(): Promise<React.ReactElement
 
   return (
     <>
-      <h1 className="page__greeting">Nuevo presupuesto</h1>
-      <p className="page__lede">
-        Empezá por el cliente. Si es nuevo, se puede crear acá sin perder lo que estás haciendo.
-      </p>
+      <header className="page__header">
+        <h1 className="page__greeting">Nuevo presupuesto</h1>
+        <p className="page__lede">
+          Empezá por el cliente. Si es nuevo, se puede crear acá sin perder lo que estás haciendo.
+        </p>
+      </header>
 
       <section className="section">
         <ElegirCliente

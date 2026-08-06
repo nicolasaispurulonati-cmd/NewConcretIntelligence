@@ -23,4 +23,4 @@ export {
   systemMetrics,
 } from './schema/workspace.js';
 export { customers, contacts, opportunities } from './schema/crm.js';
-export { quotes, quoteItems, QUOTE_STATUSES } from './schema/sales.js';
+export { quotes, quoteItems, quoteDeliveries, QUOTE_STATUSES, DELIVERY_CHANNELS } from './schema/sales.js';

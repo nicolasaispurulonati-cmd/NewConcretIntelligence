@@ -12,9 +12,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { getEntityBySlug, getRelated, isNciError } from '@nci/core';
-import { loadQuote } from '@nci/sales';
+import { loadQuote, quoteDeliveriesOf } from '@nci/sales';
 
 import { ArmarPresupuesto } from '@/components/armar-presupuesto';
+import { EnviarAlCliente } from '@/components/enviar-al-cliente';
+import { comoEnvios } from '@/lib/envios';
 import { comoVista } from '@/lib/presupuesto';
 import { requireScope } from '@/lib/session';
 
@@ -33,19 +35,32 @@ export default async function ArmarPresupuestoPage({
     // A qué cliente se le cotiza vive en el grafo, no en una clave foránea.
     const [cliente] = await getRelated(scope, entity.id, { types: ['quoted_to'], limit: 1 });
 
+    // Un borrador todavía no salió ni puede salir: el documento es de lo
+    // emitido. Preguntar por los envíos ahí sería preguntar por nada.
+    const envios = quote.status === 'borrador' ? [] : await quoteDeliveriesOf(scope, entity.id);
+
     return (
       <>
-        <p className="page__lede">
-          <Link href="/">Escritorio</Link> · <Link href={`/e/quote/${slug}`}>Ficha</Link>
+        <p className="page__breadcrumb">
+          <Link href="/">Escritorio</Link>
+          <span>·</span>
+          <Link href={`/e/quote/${slug}`}>Ficha del presupuesto</Link>
         </p>
 
-        <section className="section">
-          <ArmarPresupuesto
-            inicial={comoVista(quote)}
-            clienteId={cliente?.id ?? null}
-            clienteNombre={cliente?.displayName ?? entity.subtitle ?? 'Sin cliente'}
-          />
-        </section>
+        <ArmarPresupuesto
+          inicial={comoVista(quote)}
+          clienteId={cliente?.id ?? null}
+          clienteNombre={cliente?.displayName ?? entity.subtitle ?? 'Sin cliente'}
+        />
+
+        {/* Emitido o ya enviado: en los dos casos hay algo que mandar, y en el
+            segundo además hay historial que mostrar. */}
+        {quote.status !== 'borrador' && (
+          <section className="section">
+            <h2 className="section__title">Enviar al cliente</h2>
+            <EnviarAlCliente slug={slug} numero={quote.number} envios={comoEnvios(envios)} />
+          </section>
+        )}
       </>
     );
   } catch (error) {

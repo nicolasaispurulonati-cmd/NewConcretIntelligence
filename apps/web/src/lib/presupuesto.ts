@@ -69,3 +69,23 @@ export function comoVista(quote: Quote): PresupuestoVista {
 export function esEditable(vista: PresupuestoVista): boolean {
   return vista.status === 'borrador';
 }
+
+/**
+ * Un envío, tal como se lee en la pantalla.
+ *
+ * Sólo el tipo vive acá. La conversión está en `envios.ts`, que es de
+ * servidor: armarla necesita `deliveryChannelName`, y ése viene de
+ * `@nci/sales`, que a su vez arrastra `@nci/db` y el driver de PostgreSQL.
+ * Este módulo lo importa un componente `'use client'`, así que una sola
+ * importación de valor desde el dominio comercial metería el cliente de base
+ * de datos entero en el paquete que baja el navegador.
+ *
+ * La fecha se convierte del lado del servidor por otra razón: `sentAt` es un
+ * `Date`, y un `Date` que cruza al navegador se reinterpreta con la zona
+ * horaria de quien mira. Lo que cruza es la frase ya escrita.
+ */
+export interface EnvioVista {
+  readonly id: string;
+  readonly cuando: string;
+  readonly canal: string;
+}

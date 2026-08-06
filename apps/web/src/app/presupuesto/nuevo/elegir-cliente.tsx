@@ -67,7 +67,6 @@ export function ElegirCliente({
       <label className="alta__campo">
         <span className="font-label-caps">Cliente</span>
         <input
-          className="palette__input"
           value={filtro}
           placeholder="Buscá por nombre"
           onChange={(evento) => setFiltro(evento.target.value)}

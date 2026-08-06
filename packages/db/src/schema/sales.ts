@@ -180,6 +180,58 @@ export const quoteItems = pgTable(
   ],
 );
 
+/**
+ * Los canales por los que un presupuesto le llega al cliente.
+ *
+ * A diferencia de los estados, éstos sí tienen restricción en la base: viven
+ * en una tabla propia del dominio comercial y no en una columna compartida por
+ * los treinta tipos de entidad, así que enumerarlos acá no obliga a enumerar
+ * los de nadie más. Es el contraste exacto con DT-007.
+ */
+export const DELIVERY_CHANNELS = ['whatsapp', 'correo', 'mano'] as const;
+
+/**
+ * Cada vez que el presupuesto salió hacia el cliente.
+ *
+ * Es una tabla de hechos sucesivos y no un campo que se sobrescribe. Reenviar
+ * es normal —el cliente lo perdió, se manda también por correo, se reenvía
+ * después de una llamada— y cuándo y por dónde salió cada vez es información
+ * comercial: un presupuesto que hubo que mandar tres veces dice algo sobre esa
+ * negociación que un único `sent_at` pisado no dice.
+ *
+ * `quotes.sent_at` y `quotes.sent_via` siguen existiendo y son **el primer
+ * envío**, que es el que define desde cuándo se espera respuesta. No se pisan
+ * al reenviar.
+ *
+ * Lo que esto registra es que el documento se generó y se le entregó al
+ * vendedor para que lo mande. El transporte es manual a propósito, así que no
+ * hay acuse de recibo y el sistema no afirma que el cliente lo haya abierto.
+ */
+export const quoteDeliveries = pgTable(
+  'quote_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    quoteId: uuid('quote_id')
+      .notNull()
+      .references(() => quotes.entityId, { onDelete: 'cascade' }),
+
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+    via: text('via').notNull(),
+
+    /** Quién lo mandó. Se conserva el envío aunque la persona ya no esté. */
+    sentBy: uuid('sent_by').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (table) => [
+    index('quote_deliveries_quote_idx').on(table.quoteId, table.sentAt),
+    check('quote_deliveries_via_valid', sql`${table.via} in ('whatsapp','correo','mano')`),
+  ],
+);
+
+export const quoteDeliveriesRelations = relations(quoteDeliveries, ({ one }) => ({
+  quote: one(quotes, { fields: [quoteDeliveries.quoteId], references: [quotes.entityId] }),
+  sender: one(users, { fields: [quoteDeliveries.sentBy], references: [users.id] }),
+}));
+
 export const quotesRelations = relations(quotes, ({ one, many }) => ({
   entity: one(entities, { fields: [quotes.entityId], references: [entities.id] }),
   owner: one(users, { fields: [quotes.ownerId], references: [users.id] }),
