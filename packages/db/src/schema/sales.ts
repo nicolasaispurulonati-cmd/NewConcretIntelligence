@@ -31,11 +31,20 @@ import { users } from './identity.js';
 /**
  * Los estados por los que pasa un presupuesto.
  *
- * Se declaran acá y se validan en la base: un estado inventado por un dominio
- * futuro rompería los listados y los indicadores en silencio.
+ * `emitido` y `enviado` son dos hechos distintos y por eso son dos estados.
+ * Emitir es el acto interno de cerrar el documento: desde ahí deja de ser
+ * editable y los importes quedan comprometidos. Enviar es habérselo hecho
+ * llegar al cliente, por un medio y en un momento concretos. Colapsarlos
+ * obligaría a llamar "enviado" a un presupuesto con `sent_at` en nulo, que es
+ * un campo prometiendo algo que no ocurrió. Ver D-016.
+ *
+ * El estado vive en `entities.status`, que es una columna compartida por los
+ * treinta tipos de entidad: no hay restricción en la base que la limite a esta
+ * lista. Quien la sostiene es `TRANSITIONS` en `@nci/sales`.
  */
 export const QUOTE_STATUSES = [
   'borrador',
+  'emitido',
   'enviado',
   'aceptado',
   'rechazado',
@@ -84,6 +93,14 @@ export const quotes = pgTable(
     notes: text('notes'),
 
     // ── Seguimiento ────────────────────────────────────────────────────
+    /**
+     * Cuándo se emitió: el acto interno de cerrar el documento.
+     *
+     * Es lo que congela el presupuesto. Un presupuesto emitido y todavía no
+     * enviado es un caso real y frecuente — se cierra para revisarlo, se manda
+     * después—, y hasta que este campo existió no había forma de representarlo.
+     */
+    issuedAt: timestamp('issued_at', { withTimezone: true }),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     /** Por dónde se envió: 'correo' | 'whatsapp' | 'mano'. */
     sentVia: text('sent_via'),
@@ -105,6 +122,9 @@ export const quotes = pgTable(
       'quotes_totals_not_negative',
       sql`${table.subtotal} >= 0 and ${table.taxTotal} >= 0 and ${table.total} >= 0`,
     ),
+    // No se puede haber enviado algo que nunca se emitió. Es la única parte
+    // del orden entre los dos hechos que la base puede sostener sola.
+    check('quotes_sent_requires_issued', sql`${table.sentAt} is null or ${table.issuedAt} is not null`),
   ],
 );
 

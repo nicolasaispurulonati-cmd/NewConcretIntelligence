@@ -16,8 +16,14 @@ import type { OpenQuoteTotals } from '@nci/sales';
 
 import { comprometido } from './workspace.js';
 
-function fila(currency: string, total: number, drafts = 1, awaiting = 0): OpenQuoteTotals {
-  return { currency, total, drafts, awaiting };
+function fila(
+  currency: string,
+  total: number,
+  drafts = 1,
+  awaiting = 0,
+  issued = 0,
+): OpenQuoteTotals {
+  return { currency, total, drafts, issued, awaiting };
 }
 
 describe('Con una sola moneda', () => {
@@ -66,5 +72,22 @@ describe('Con más de una moneda', () => {
 
     assert.equal(metric.context[0]?.value, '3', 'dos borradores más uno');
     assert.equal(metric.context[1]?.value, '4', 'uno esperando más tres');
+  });
+});
+
+describe('Emitido y sin enviar', () => {
+  it('cuenta en "sin enviar", igual que un borrador', () => {
+    // Son dos estados distintos y por eso existen dos (D-016), pero le piden a
+    // quien mira el tablero exactamente lo mismo: mandarlo. Contarlos por
+    // separado partiría en dos una sola cosa por hacer.
+    const metric = comprometido([fila('ARS', 121_000, 2, 0, 3)]);
+
+    assert.equal(metric.context[0]?.value, '5', 'dos borradores más tres emitidos');
+  });
+
+  it('no se cuenta como esperando respuesta, porque el cliente no lo vio', () => {
+    const metric = comprometido([fila('ARS', 121_000, 0, 0, 4)]);
+
+    assert.equal(metric.context[1]?.value, '0');
   });
 });

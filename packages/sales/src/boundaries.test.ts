@@ -95,7 +95,16 @@ describe('La moneda es del presupuesto y no del renglón', () => {
   });
 
   it('LineInput no admite moneda por renglón', () => {
-    const definicion = bloque(fuente(join(paqueteRaiz, 'src', 'money.ts')), 'export interface LineInput {', '}');
+    // La aritmética de dinero se mudó a `@nci/domain` para que el navegador
+    // pueda ejecutar las mismas reglas que el servidor (D-015). La guarda
+    // sigue vigente y se vigila donde ahora vive: cuando el archivo se movió,
+    // esta prueba se puso en rojo en lugar de dejar de verificar en silencio,
+    // que es exactamente para lo que está escrita así.
+    const definicion = bloque(
+      fuente(join(paqueteRaiz, '..', 'domain', 'src', 'money.ts')),
+      'export interface LineInput {',
+      '}',
+    );
 
     assert.ok(
       definicion.includes(`${MONEDA}?: never`),

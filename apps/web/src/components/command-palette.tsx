@@ -37,7 +37,7 @@ interface QuickAction {
  *  inmediatamente."
  */
 const QUICK_ACTIONS: readonly QuickAction[] = [
-  { label: 'Nuevo presupuesto', href: '/e/quote/nuevo', keywords: ['presupuesto', 'cotizar', 'nuevo'] },
+  { label: 'Nuevo presupuesto', href: '/presupuesto/nuevo', keywords: ['presupuesto', 'cotizar', 'nuevo'] },
   { label: 'Registrar compra', href: '/e/purchase_order/nuevo', keywords: ['compra', 'orden', 'proveedor'] },
   { label: 'Consultar producto', href: '/buscar?tipo=product', keywords: ['producto', 'ficha', 'consultar'] },
   { label: 'Crear procedimiento', href: '/e/procedure/nuevo', keywords: ['procedimiento', 'crear', 'instructivo'] },

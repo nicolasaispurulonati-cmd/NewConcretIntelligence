@@ -29,6 +29,13 @@
       "when": 1785933216783,
       "tag": "0003_vocabulario_procedencia",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786020856147,
+      "tag": "0004_emision",
+      "breakpoints": true
     }
   ]
 }

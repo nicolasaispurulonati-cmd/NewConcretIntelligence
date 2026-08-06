@@ -275,7 +275,10 @@ export async function loadWorkspace(scope: Scope): Promise<WorkspaceLayout> {
  */
 export function comprometido(abiertos: readonly OpenQuoteTotals[]): Metric {
   const importes = abiertos.map((fila) => formatMoney(fila.total, fila.currency));
-  const borradores = abiertos.reduce((total, fila) => total + fila.drafts, 0);
+  // "Sin enviar" son los dos estados que todavía no salieron: el que se está
+  // escribiendo y el que ya se cerró y espera que alguien lo mande. Los dos le
+  // piden algo a quien mira el tablero, y es la misma acción.
+  const sinEnviar = abiertos.reduce((total, fila) => total + fila.drafts + fila.issued, 0);
   const esperando = abiertos.reduce((total, fila) => total + fila.awaiting, 0);
 
   return metric({
@@ -285,7 +288,7 @@ export function comprometido(abiertos: readonly OpenQuoteTotals[]): Metric {
         : 'Comprometido en presupuestos abiertos',
     value: importes.join(' · '),
     context: [
-      { label: 'Sin enviar', value: String(borradores) },
+      { label: 'Sin enviar', value: String(sinEnviar) },
       { label: 'Esperando respuesta', value: String(esperando) },
     ],
   });
@@ -308,7 +311,11 @@ function describeQuote(
 
   switch (status) {
     case 'borrador':
-      return `${importe} · borrador, todavía sin enviar`;
+      return `${importe} · borrador, todavía sin emitir`;
+    case 'emitido':
+      // Emitido y sin enviar es una tarea pendiente concreta, y el estado la
+      // tiene que decir. Es el caso que antes no se podía representar.
+      return `${importe} · emitido, falta enviarlo al cliente`;
     case 'enviado':
       return sentAt
         ? `${importe} · enviado ${formatRelativeTime(sentAt)}, sin respuesta`

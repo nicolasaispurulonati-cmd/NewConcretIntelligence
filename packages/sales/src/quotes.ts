@@ -25,9 +25,17 @@ import { customers, entities, quoteItems, quotes } from '@nci/db';
 
 import { calculateLine, calculateQuote, formatMoney, type Cents } from './money.js';
 
-/** Los estados por los que pasa un presupuesto, y a cuáles puede ir cada uno. */
+/**
+ * Los estados por los que pasa un presupuesto, y a cuáles puede ir cada uno.
+ *
+ * `emitido` y `enviado` son dos hechos distintos (D-016). Emitir cierra el
+ * documento y lo congela; enviar es habérselo hecho llegar al cliente, por un
+ * medio concreto. Un presupuesto emitido puede vencer sin haberse enviado
+ * nunca, pero no puede ser aceptado ni rechazado: nadie del otro lado lo vio.
+ */
 const TRANSITIONS: Record<string, readonly string[]> = {
-  borrador: ['enviado'],
+  borrador: ['emitido'],
+  emitido: ['enviado', 'vencido'],
   enviado: ['aceptado', 'rechazado', 'vencido'],
   aceptado: [],
   rechazado: [],
@@ -75,6 +83,7 @@ export interface Quote {
   readonly taxTotal: Cents;
   readonly total: Cents;
   readonly notes: string | null;
+  readonly issuedAt: Date | null;
   readonly sentAt: Date | null;
   readonly sentVia: string | null;
   readonly rejectionReason: string | null;
@@ -95,10 +104,10 @@ export interface CreateQuoteInput {
 /**
  * Crea un presupuesto en borrador para un cliente.
  *
- * Antes de crear nada verifica que el cliente tenga condición de pago. Es la
- * situación que el PDL usa como ejemplo de error que enseña: en lugar de
- * fallar al generar el PDF, se explica la causa y se ofrece la acción que la
- * resuelve.
+ * No exige condición de pago. La regla —un presupuesto sin plazo no se puede
+ * sostener— sigue en pie, pero se cobra al emitir y no al empezar: pedirla acá
+ * hace que el primer acto del sistema frente a un cliente nuevo que llamó por
+ * teléfono sea negarse a empezar. Ver D-013.
  */
 export async function createQuote(scope: Scope, input: CreateQuoteInput): Promise<Quote> {
   scope.actor.assertCanActOn('quote', 'create');
@@ -111,30 +120,10 @@ export async function createQuote(scope: Scope, input: CreateQuoteInput): Promis
     });
   }
 
-  const [commercial] = await scope.db
-    .select({ paymentTermsDays: customers.paymentTermsDays, currency: customers.currency })
-    .from(customers)
-    .where(eq(customers.entityId, input.customerId))
-    .limit(1);
-
-  if (!commercial || commercial.paymentTermsDays === null) {
-    throw new ValidationError({
-      message: `No fue posible generar el presupuesto porque ${customer.displayName} no tiene una condición de pago asignada.`,
-      reason:
-        'La condición de pago determina el vencimiento y las cuotas, así que el presupuesto no puede emitirse sin ella.',
-      field: 'paymentTermsDays',
-      actions: [
-        {
-          label: 'Configurar condición de pago',
-          href: `/e/customer/${customer.slug}`,
-          requires: 'crm.customer.update',
-        },
-      ],
-    });
-  }
+  const commercial = await commercialTerms(scope, input.customerId);
 
   const number = await nextQuoteNumber(scope);
-  const currency = input.currency ?? commercial.currency;
+  const currency = input.currency ?? commercial?.currency ?? 'ARS';
 
   const entity = await createEntity(scope, {
     type: 'quote',
@@ -151,7 +140,9 @@ export async function createQuote(scope: Scope, input: CreateQuoteInput): Promis
     version: 1,
     currency,
     validUntil: input.validUntil ?? null,
-    paymentTermsDays: commercial.paymentTermsDays,
+    // Puede ser nula: el borrador no la exige. La copia definitiva se toma al
+    // emitir, que es cuando el documento se congela.
+    paymentTermsDays: commercial?.paymentTermsDays ?? null,
     notes: input.notes ?? null,
     ownerId: scope.actor.id,
   });
@@ -201,10 +192,31 @@ export async function addQuoteItem(
   scope: Scope,
   quoteId: string,
   item: QuoteItemInput,
+  origin: {
+    /**
+     * En qué moneda viene expresado el precio de origen.
+     *
+     * Lo declara quien trae el precio de otro lado — el catálogo, hoy una
+     * semilla y mañana Tango. No se guarda: existe para poder rechazar el
+     * renglón si no coincide con la del presupuesto. Sin esto, un precio en
+     * dólares entraría a un presupuesto en pesos como si fuera un número más,
+     * y el total resultante sería una cifra que no significa nada. Ver D-003.
+     */
+    readonly priceCurrency?: string;
+  } = {},
 ): Promise<Quote> {
   const quote = await loadQuote(scope, quoteId);
   assertEditable(quote);
   scope.actor.assertCanActOn('quote', 'update');
+
+  if (origin.priceCurrency && origin.priceCurrency !== quote.currency) {
+    throw new ValidationError({
+      message: `No fue posible agregar "${item.description}" porque su precio está en ${origin.priceCurrency} y ${quote.number} está en ${quote.currency}.`,
+      reason:
+        'Un presupuesto tiene una sola moneda y el sistema no convierte: no hay tipo de cambio, y convertir sin uno sería inventar el importe.',
+      field: 'unitPrice',
+    });
+  }
 
   if (item.quantity <= 0) {
     throw new ValidationError({
@@ -299,10 +311,74 @@ async function recalculate(scope: Scope, quoteId: string): Promise<Quote> {
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Marca el presupuesto como enviado.
+ * Emite el presupuesto: lo cierra y lo congela.
  *
- * Desde acá deja de ser editable. Lo que el cliente recibió tiene que poder
- * leerse tal como se envió — para cambiar algo se emite una versión nueva.
+ * Es acá donde se cobra la condición de pago (D-013). El presupuesto se pudo
+ * armar entero sin ella, y el error que aparece si falta explica la causa y
+ * ofrece la acción que la resuelve, en lugar de fallar al generar el PDF.
+ *
+ * La condición se relee del cliente en este momento y no se confía en la copia
+ * del borrador: entre que se creó el borrador y se emite pueden haber pasado
+ * días, y el plazo pudo cargarse en el medio. Lo que se congela es lo que vale
+ * al emitir.
+ */
+export async function issueQuote(scope: Scope, quoteId: string): Promise<Quote> {
+  const quote = await loadQuote(scope, quoteId);
+  scope.actor.assertCanActOn('quote', 'update');
+  assertTransition(quote, 'emitido');
+
+  if (quote.items.length === 0) {
+    throw new ValidationError({
+      message: 'No fue posible emitir el presupuesto porque no tiene renglones.',
+      reason: 'Un presupuesto sin ítems no comunica ninguna oferta.',
+      actions: [{ label: 'Agregar un producto' }],
+    });
+  }
+
+  const customerId = await customerOf(scope, quoteId);
+  const customer = customerId ? await getEntity(scope, customerId) : null;
+  const commercial = customerId ? await commercialTerms(scope, customerId) : null;
+  const plazo = commercial?.paymentTermsDays ?? quote.paymentTermsDays;
+
+  if (plazo === null) {
+    const nombre = customer?.displayName ?? 'el cliente';
+    throw new ValidationError({
+      message: `No fue posible emitir ${quote.number} porque ${nombre} no tiene una condición de pago asignada.`,
+      reason:
+        'La condición de pago determina el vencimiento y las cuotas, así que el presupuesto no puede emitirse sin ella. El borrador queda como está.',
+      field: 'paymentTermsDays',
+      actions: [
+        {
+          label: 'Configurar condición de pago',
+          ...(customer ? { href: `/e/customer/${customer.slug}` } : {}),
+          requires: 'crm.customer.update',
+        },
+      ],
+    });
+  }
+
+  await scope.db
+    .update(quotes)
+    .set({ issuedAt: new Date(), paymentTermsDays: plazo })
+    .where(eq(quotes.entityId, quoteId));
+
+  await updateEntity(scope, quoteId, { status: 'emitido' });
+
+  await recordActivity(scope, {
+    entityId: quoteId,
+    verb: 'emitió',
+    summary: `${scope.actor.fullName} emitió ${quote.number} por ${formatMoney(quote.total, quote.currency)}.`,
+  });
+
+  return loadQuote(scope, quoteId);
+}
+
+/**
+ * Registra que el presupuesto emitido llegó al cliente.
+ *
+ * Es la transición emitido → enviado, y nada más que eso: quien lo manda es
+ * una persona, por el medio que corresponda. Que NCI lo haga llegar por sí
+ * mismo es otro trabajo y todavía no existe. Ver D-016.
  */
 export async function sendQuote(
   scope: Scope,
@@ -312,14 +388,6 @@ export async function sendQuote(
   const quote = await loadQuote(scope, quoteId);
   scope.actor.assertCanActOn('quote', 'update');
   assertTransition(quote, 'enviado');
-
-  if (quote.items.length === 0) {
-    throw new ValidationError({
-      message: 'No fue posible enviar el presupuesto porque no tiene renglones.',
-      reason: 'Un presupuesto sin ítems no comunica ninguna oferta.',
-      actions: [{ label: 'Agregar un producto' }],
-    });
-  }
 
   await scope.db
     .update(quotes)
@@ -498,6 +566,7 @@ export async function loadQuote(scope: Scope, quoteId: string): Promise<Quote> {
     taxTotal: header.taxTotal,
     total: header.total,
     notes: header.notes,
+    issuedAt: header.issuedAt,
     sentAt: header.sentAt,
     sentVia: header.sentVia,
     rejectionReason: header.rejectionReason,
@@ -517,13 +586,17 @@ export async function loadQuote(scope: Scope, quoteId: string): Promise<Quote> {
 }
 
 /** Los estados en los que un presupuesto todavía espera algo de alguien. */
-const OPEN_STATUSES = ['borrador', 'enviado'] as const;
+const OPEN_STATUSES = ['borrador', 'emitido', 'enviado'] as const;
 
 export interface OpenQuoteTotals {
   readonly currency: string;
   /** Suma de los totales de esa moneda. Nunca se combina con otra. */
   readonly total: Cents;
+  /** En borrador: todavía se puede editar. */
   readonly drafts: number;
+  /** Emitidos y sin enviar: cerrados, esperando que alguien los mande. */
+  readonly issued: number;
+  /** Enviados y sin respuesta del cliente. */
   readonly awaiting: number;
 }
 
@@ -553,6 +626,7 @@ export async function openQuoteTotals(
       currency: quotes.currency,
       total: sql<number>`coalesce(sum(${quotes.total}), 0)`,
       drafts: sql<number>`count(*) filter (where ${entities.status} = 'borrador')`,
+      issued: sql<number>`count(*) filter (where ${entities.status} = 'emitido')`,
       awaiting: sql<number>`count(*) filter (where ${entities.status} = 'enviado')`,
     })
     .from(quotes)
@@ -573,6 +647,7 @@ export async function openQuoteTotals(
     currency: row.currency,
     total: Number(row.total),
     drafts: Number(row.drafts),
+    issued: Number(row.issued),
     awaiting: Number(row.awaiting),
   }));
 }
@@ -633,6 +708,20 @@ export async function countAwaitingResponse(scope: Scope): Promise<number> {
   return Number(fila?.total ?? 0);
 }
 
+/** La condición de pago y la moneda del cliente, si están cargadas. */
+async function commercialTerms(
+  scope: Scope,
+  customerId: string,
+): Promise<{ paymentTermsDays: number | null; currency: string } | null> {
+  const [fila] = await scope.db
+    .select({ paymentTermsDays: customers.paymentTermsDays, currency: customers.currency })
+    .from(customers)
+    .where(eq(customers.entityId, customerId))
+    .limit(1);
+
+  return fila ?? null;
+}
+
 /** El cliente al que se le emitió, según el grafo. */
 async function customerOf(scope: Scope, quoteId: string): Promise<string | null> {
   const [row] = await scope.db
@@ -657,7 +746,7 @@ function assertEditable(quote: Quote): void {
 
   throw new ValidationError({
     message: `${quote.number} ya no se puede modificar.`,
-    reason: `Está en estado "${quote.status}". Lo que se le envió al cliente tiene que quedar como se envió.`,
+    reason: `Está en estado "${quote.status}". Emitir es lo que cierra el documento: lo que se emitió tiene que quedar como se emitió.`,
     actions: [{ label: 'Crear una versión nueva', requires: 'sales.quote.create' }],
   });
 }

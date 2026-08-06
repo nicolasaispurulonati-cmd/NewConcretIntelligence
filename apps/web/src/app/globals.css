@@ -357,3 +357,151 @@
   font-size: var(--nci-text-sm);
   color: var(--nci-text-muted);
 }
+
+/* ── Armado de presupuesto ────────────────────────────────────────────── */
+
+.armar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-4);
+}
+
+.armar__cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--nci-space-3);
+  flex-wrap: wrap;
+}
+
+.armar__moneda {
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+}
+
+.armar__nuevo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-3);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius);
+  padding: var(--nci-space-3);
+  background: var(--nci-surface-raised);
+}
+
+.armar__campos {
+  display: flex;
+  gap: var(--nci-space-3);
+  flex-wrap: wrap;
+}
+
+.armar__catalogo {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-1);
+}
+
+.armar__catalogo button {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nci-space-3);
+  width: 100%;
+  text-align: left;
+  padding: var(--nci-space-2);
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius);
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--nci-text-sm);
+}
+
+.armar__catalogo-precio {
+  color: var(--nci-text-muted);
+  font-size: var(--nci-text-xs);
+  white-space: nowrap;
+}
+
+.armar__renglones {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--nci-text-sm);
+}
+
+.armar__renglones th,
+.armar__renglones td {
+  text-align: left;
+  padding: var(--nci-space-2);
+  border-bottom: 1px solid var(--nci-border);
+}
+
+.armar__renglones th {
+  font-size: var(--nci-text-xs);
+  color: var(--nci-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.armar__quitar {
+  background: transparent;
+  border: 0;
+  color: var(--nci-text-muted);
+  font-size: var(--nci-text-xs);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.armar__totales {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nci-space-1);
+  margin: 0;
+  max-width: 22rem;
+  align-self: flex-end;
+  width: 100%;
+  font-size: var(--nci-text-sm);
+}
+
+.armar__totales > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--nci-space-3);
+}
+
+.armar__totales dt {
+  color: var(--nci-text-muted);
+}
+
+.armar__totales dd {
+  margin: 0;
+}
+
+.armar__total {
+  border-top: 1px solid var(--nci-border);
+  padding-top: var(--nci-space-1);
+  font-weight: 600;
+}
+
+.armar__falla,
+.armar__congelado {
+  border: 1px solid var(--nci-border);
+  border-radius: var(--nci-radius);
+  padding: var(--nci-space-3);
+  background: var(--nci-surface-raised);
+  font-size: var(--nci-text-sm);
+}
+
+.armar__remedio {
+  display: flex;
+  gap: var(--nci-space-3);
+  align-items: flex-end;
+  margin-top: var(--nci-space-3);
+  flex-wrap: wrap;
+}
+
+.armar__ayuda {
+  color: var(--nci-text-muted);
+  font-size: var(--nci-text-sm);
+}

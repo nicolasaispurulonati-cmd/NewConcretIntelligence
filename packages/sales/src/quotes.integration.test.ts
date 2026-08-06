@@ -12,13 +12,14 @@ import { after, before, describe, it } from 'node:test';
 import { Actor, ValidationError, createEntity, resolveCapabilities, type Scope } from '@nci/core';
 import { createDatabase, customers, entities, requireDatabaseUrl, users, type Database } from '@nci/db';
 import { ROLES } from '@nci/domain';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 import {
   acceptQuote,
   addQuoteItem,
   createNewVersion,
   createQuote,
+  issueQuote,
   openQuoteTotals,
   rejectQuote,
   sendQuote,
@@ -87,19 +88,49 @@ function anotar<T extends { entity: { id: string } }>(quote: T): T {
 }
 
 
-describe('Presupuesto: ciclo de vida', () => {
-  it('no se emite a un cliente sin condición de pago', async () => {
-    const sinCondicion = await crearTemporal(scope, {
+describe('La condición de pago bloquea la emisión, no el borrador', () => {
+  /** Un cliente sin condición de pago cargada. */
+  async function clienteSinPlazo(sufijo: string): Promise<string> {
+    const cliente = await crearTemporal(scope, {
       type: 'customer',
-      slug: `cliente-sin-condicion-${marca}`,
-      displayName: `Cliente sin condición ${marca}`,
+      slug: `cliente-sin-plazo-${sufijo}-${marca}`,
+      displayName: `Cliente sin plazo ${sufijo} ${marca}`,
       status: 'activo',
     });
-    await scope.db.insert(customers).values({ entityId: sinCondicion.id, paymentTermsDays: null });
+    await scope.db.insert(customers).values({ entityId: cliente.id, paymentTermsDays: null });
+    return cliente.id;
+  }
+
+  it('el borrador se crea igual, y con renglones', async () => {
+    // Ésta es la razón de D-013. Un cliente nuevo que llamó por teléfono no
+    // tiene plazo cargado, y negarse a empezar es el momento exacto en que
+    // alguien vuelve al cuaderno.
+    const customerId = await clienteSinPlazo('borrador');
+
+    const presupuesto = anotar(await createQuote(scope, { customerId }));
+    assert.equal(presupuesto.status, 'borrador');
+    assert.equal(presupuesto.paymentTermsDays, null, 'no se inventa un plazo');
+
+    const conRenglon = await addQuoteItem(scope, presupuesto.entity.id, {
+      description: 'Concret D',
+      quantity: 1,
+      unitPrice: 10_000,
+    });
+    assert.equal(conRenglon.items.length, 1);
+  });
+
+  it('emitir se rechaza, con la acción que lo resuelve', async () => {
+    const customerId = await clienteSinPlazo('emision');
+    const presupuesto = anotar(await createQuote(scope, { customerId }));
+    await addQuoteItem(scope, presupuesto.entity.id, {
+      description: 'Concret D',
+      quantity: 1,
+      unitPrice: 10_000,
+    });
 
     let error: ValidationError | undefined;
     try {
-      anotar(await createQuote(scope, { customerId: sinCondicion.id }));
+      await issueQuote(scope, presupuesto.entity.id);
     } catch (caught) {
       error = caught as ValidationError;
     }
@@ -108,9 +139,127 @@ describe('Presupuesto: ciclo de vida', () => {
     assert.match(error.message, /no tiene una condición de pago asignada/);
     assert.ok(error.actions.length > 0, 'el error tiene que ofrecer la acción que lo resuelve');
     assert.equal(error.actions[0]?.label, 'Configurar condición de pago');
+
+    // Y lo que ya estaba armado no se pierde: el error interrumpe la emisión,
+    // no el trabajo.
+    const { loadQuote } = await import('./quotes.js');
+    const intacto = await loadQuote(scope, presupuesto.entity.id);
+    assert.equal(intacto.status, 'borrador');
+    assert.equal(intacto.items.length, 1);
   });
 
-  it('recorre borrador → enviado → aceptado', async () => {
+  it('el plazo se lee al emitir, no se confía en la copia del borrador', async () => {
+    // Entre crear el borrador y emitirlo pueden pasar días, y el plazo pudo
+    // cargarse en el medio. Lo que se congela es lo que vale al emitir.
+    const customerId = await clienteSinPlazo('tardio');
+    const presupuesto = anotar(await createQuote(scope, { customerId }));
+    await addQuoteItem(scope, presupuesto.entity.id, {
+      description: 'Concret D',
+      quantity: 1,
+      unitPrice: 10_000,
+    });
+    assert.equal(presupuesto.paymentTermsDays, null);
+
+    await scope.db
+      .update(customers)
+      .set({ paymentTermsDays: 45 })
+      .where(eq(customers.entityId, customerId));
+
+    const emitido = await issueQuote(scope, presupuesto.entity.id);
+    assert.equal(emitido.status, 'emitido');
+    assert.equal(emitido.paymentTermsDays, 45, 'copia el plazo que valía al emitir');
+  });
+});
+
+describe('Emitido y enviado son dos hechos distintos', () => {
+  async function conRenglon(sufijo: string) {
+    const cliente = await crearTemporal(scope, {
+      type: 'customer',
+      slug: `cliente-emision-${sufijo}-${marca}`,
+      displayName: `Cliente emisión ${sufijo} ${marca}`,
+      status: 'activo',
+    });
+    await scope.db.insert(customers).values({ entityId: cliente.id, paymentTermsDays: 30 });
+
+    const presupuesto = anotar(await createQuote(scope, { customerId: cliente.id }));
+    return addQuoteItem(scope, presupuesto.entity.id, {
+      description: 'Concret D',
+      quantity: 1,
+      unitPrice: 10_000,
+    });
+  }
+
+  it('emitir congela el presupuesto sin afirmar que salió', async () => {
+    // Es el motivo de D-016. Si emitir marcara `sentAt`, el sistema estaría
+    // diciendo que el cliente lo recibió cuando nadie lo mandó todavía.
+    const presupuesto = await issueQuote(scope, (await conRenglon('congela')).entity.id);
+
+    assert.equal(presupuesto.status, 'emitido');
+    assert.ok(presupuesto.issuedAt, 'queda registrado cuándo se emitió');
+    assert.equal(presupuesto.sentAt, null, 'y nada dice que se haya enviado');
+    assert.equal(presupuesto.sentVia, null);
+  });
+
+  it('ya emitido no se puede editar', async () => {
+    const presupuesto = await issueQuote(scope, (await conRenglon('congelado')).entity.id);
+
+    await assert.rejects(
+      () =>
+        addQuoteItem(scope, presupuesto.entity.id, {
+          description: 'Otro ítem',
+          quantity: 1,
+          unitPrice: 1_000,
+        }),
+      ValidationError,
+    );
+  });
+
+  it('no se puede enviar lo que no se emitió', async () => {
+    const borrador = await conRenglon('sin-emitir');
+
+    let error: ValidationError | undefined;
+    try {
+      await sendQuote(scope, borrador.entity.id, 'correo');
+    } catch (caught) {
+      error = caught as ValidationError;
+    }
+
+    assert.ok(error instanceof ValidationError);
+    assert.match(error.reason, /sólo puede pasar a: emitido/);
+  });
+
+  it('enviar conserva la fecha de emisión', async () => {
+    const emitido = await issueQuote(scope, (await conRenglon('conserva')).entity.id);
+    const enviado = await sendQuote(scope, emitido.entity.id, 'whatsapp');
+
+    assert.equal(enviado.status, 'enviado');
+    assert.deepEqual(enviado.issuedAt, emitido.issuedAt, 'la emisión no se pisa al enviar');
+    assert.ok(enviado.sentAt, 'y ahora sí hay fecha de envío');
+    assert.equal(enviado.sentVia, 'whatsapp');
+  });
+
+  it('no se emite un presupuesto vacío', async () => {
+    const cliente = await crearTemporal(scope, {
+      type: 'customer',
+      slug: `cliente-vacio-${marca}`,
+      displayName: `Cliente vacío ${marca}`,
+      status: 'activo',
+    });
+    await scope.db.insert(customers).values({ entityId: cliente.id, paymentTermsDays: 30 });
+    const vacio = anotar(await createQuote(scope, { customerId: cliente.id }));
+
+    let error: ValidationError | undefined;
+    try {
+      await issueQuote(scope, vacio.entity.id);
+    } catch (caught) {
+      error = caught as ValidationError;
+    }
+    assert.match(String(error?.message), /no tiene renglones/);
+  });
+});
+
+describe('Presupuesto: ciclo de vida', () => {
+  it('recorre borrador → emitido → enviado → aceptado', async () => {
     const cliente = await crearTemporal(scope, {
       type: 'customer',
       slug: `constructora-${marca}`,
@@ -125,15 +274,6 @@ describe('Presupuesto: ciclo de vida', () => {
     assert.equal(presupuesto.version, 1);
     assert.equal(presupuesto.paymentTermsDays, 30, 'copia la condición del cliente');
     assert.match(presupuesto.number, /^P-\d{4}-\d{4}$/);
-
-    // No se puede enviar vacío
-    let vacio: ValidationError | undefined;
-    try {
-      await sendQuote(scope, presupuesto.entity.id, 'correo');
-    } catch (caught) {
-      vacio = caught as ValidationError;
-    }
-    assert.match(String(vacio?.message), /no tiene renglones/);
 
     // Renglones
     presupuesto = await addQuoteItem(scope, presupuesto.entity.id, {
@@ -154,7 +294,10 @@ describe('Presupuesto: ciclo de vida', () => {
     assert.equal(presupuesto.discountTotal, 10_000);
     assert.equal(presupuesto.total, 290_400);
 
-    // Enviar
+    // Emitir, y recién después enviar
+    presupuesto = await issueQuote(scope, presupuesto.entity.id);
+    assert.equal(presupuesto.status, 'emitido');
+
     presupuesto = await sendQuote(scope, presupuesto.entity.id, 'whatsapp');
     assert.equal(presupuesto.status, 'enviado');
     assert.ok(presupuesto.sentAt, 'queda registrado cuándo se envió');
@@ -172,7 +315,7 @@ describe('Presupuesto: ciclo de vida', () => {
       bloqueado = caught as ValidationError;
     }
     assert.match(String(bloqueado?.message), /ya no se puede modificar/);
-    assert.match(String(bloqueado?.reason), /como se envió/);
+    assert.match(String(bloqueado?.reason), /como se emitió/);
 
     // Aceptar
     presupuesto = await acceptQuote(scope, presupuesto.entity.id);
@@ -194,6 +337,7 @@ describe('Presupuesto: ciclo de vida', () => {
       quantity: 1,
       unitPrice: 50_000,
     });
+    presupuesto = await issueQuote(scope, presupuesto.entity.id);
     presupuesto = await sendQuote(scope, presupuesto.entity.id, 'correo');
 
     let sinMotivo: ValidationError | undefined;
@@ -224,6 +368,7 @@ describe('Presupuesto: ciclo de vida', () => {
       quantity: 4,
       unitPrice: 25_000,
     });
+    original = await issueQuote(scope, original.entity.id);
     original = await sendQuote(scope, original.entity.id, 'correo');
 
     const segunda = anotar(await createNewVersion(scope, original.entity.id));
@@ -256,6 +401,7 @@ describe('Presupuesto: ciclo de vida', () => {
       quantity: 1,
       unitPrice: 10_000,
     });
+    presupuesto = await issueQuote(scope, presupuesto.entity.id);
     presupuesto = await sendQuote(scope, presupuesto.entity.id, 'correo');
     presupuesto = await acceptQuote(scope, presupuesto.entity.id);
 

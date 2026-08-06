@@ -246,6 +246,26 @@ El fundamento real es otro y no depende del motor: **las pruebas de integración
 
 ---
 
+## D-013 · La condición de pago bloquea la emisión, no el borrador
+
+**Fecha:** 2026-08-06 · **Estado:** vigente
+
+**Decisión:** un presupuesto se puede armar entero sin que el cliente tenga condición de pago cargada. Lo que no se puede es emitirlo. La compuerta se mueve de `createQuote` al momento de emitir, y el error que aparece ahí ofrece cargar el plazo sin salir de la pantalla.
+
+**Motivo:** la regla nunca estuvo en discusión — un presupuesto sin condición de pago es un documento que promete algo que la administración no puede sostener. Lo que estaba mal era dónde se cobraba. Pedirla al crear el borrador hace que el primer acto del sistema, frente a un cliente nuevo que llamó por teléfono, sea negarse a empezar por un dato que quien atiende todavía no tiene. Ese es el momento exacto en que alguien vuelve al cuaderno, y el dato se pierde entero en vez de perderse a medias.
+
+La alternativa descartada era volver opcional la condición de pago. No se sostiene: convierte una regla real de la administración en una preferencia, y el defecto reaparece más tarde y más caro, cuando ya hay presupuestos emitidos sin plazo.
+
+**Recomendación aplicada encima:** el campo se ofrece igual en el alta, dentro de "Datos para facturar", sin obligar. Quien lo tiene a mano lo carga en el momento y nunca ve la compuerta. Quien no lo tiene avanza. Ofrecer sin exigir es distinto de no ofrecer.
+
+**Consecuencias:** habilita cotizar contra un cliente incompleto, que es el caso normal cuando el cliente es nuevo. Cierra la posibilidad de emitir sin plazo. Cuesta que exista un estado intermedio real —borradores que no se pueden emitir— y ese estado tiene que ser visible: el error al emitir no puede ser la primera vez que alguien se entera.
+
+**Una consecuencia que no era obvia:** al emitir, el plazo se relee del cliente y no se toma de la copia que el borrador guardó al crearse. Entre las dos cosas pueden haber pasado días y el plazo pudo cargarse en el medio; lo que se congela es lo que vale al emitir. Sin eso, mover la compuerta habría producido un presupuesto emitido con el plazo en nulo, que es peor que el bloqueo que esta decisión saca.
+
+**Evidencia:** `issueQuote` en `packages/sales/src/quotes.ts` es donde se cobra; `createQuote` ya no la exige. La salida del error es `setPaymentTerms` (`packages/crm/src/customers.ts`), ofrecida como acción dentro del propio error y resuelta sin salir de la pantalla en `armar-presupuesto.tsx`. El bloque `La condición de pago bloquea la emisión, no el borrador` en `packages/sales/src/quotes.integration.test.ts` cubre los tres casos: que el borrador se cree igual, que emitir se rechace, y que el plazo se lea al emitir.
+
+---
+
 ## D-014 · La unicidad del identificador es del grafo, no del negocio
 
 **Fecha:** 2026-08-06 · **Estado:** vigente
@@ -282,6 +302,26 @@ La partición no es "front y back". Es qué necesita saber la regla para respond
 **Consecuencias:** habilita que un cambio de regla llegue a las dos puntas en el mismo commit. Cierra la posibilidad de que una regla pura viva en un componente. Cuesta que `@nci/domain` no pueda importar nada con base — que es lo que la hace útil, y es la misma restricción que D-002 pone sobre `@nci/ai`, por la misma clase de motivo.
 
 **Evidencia:** `packages/domain/src/customer.ts` (`validateCustomer`, `looksLikeSameCustomer`) con sus pruebas; `packages/crm/src/customers.ts` (`findSimilarCustomers`, `slugDisponible`); `apps/web/src/components/alta-de-cliente.tsx`, que importa las mismas funciones que ejecuta el servidor.
+
+---
+
+## D-016 · Emitido y enviado son dos estados, no uno con dos nombres
+
+**Fecha:** 2026-08-06 · **Estado:** vigente
+
+**Decisión:** el presupuesto recorre `borrador → emitido → enviado`. Emitir es el acto interno de cerrar el documento: congela los renglones y los importes, y es donde se cobra la condición de pago (D-013). Enviar es habérselo hecho llegar al cliente, por un medio y en un momento concretos. `sendQuote` pasa a ser la transición `emitido → enviado` y nada más.
+
+**Motivo:** hasta acá el sistema hacía las dos cosas en un solo acto. Un presupuesto cerrado y todavía no mandado —se revisa antes de mandarlo, se espera a saber por qué medio, se emite el viernes y se manda el lunes— no se podía representar.
+
+La alternativa que se propuso primero era renombrar `enviado` a `emitido`. Se rechazó: dejaría `sentAt` y `sentVia` en nulo dentro de un presupuesto que el sistema llama enviado, o peor, los llenaría con el instante de la emisión. Un campo que promete algo que el código no cumple es la familia exacta de defecto que este proyecto viene sacando del sistema hace varias sesiones. **Se separa, no se renombra.**
+
+**Lo que esto habilita y que antes no existía:** que el escritorio distinga "falta que lo termines" de "falta que lo mandes". Son dos tareas distintas de la misma persona y hasta ahora se veían iguales.
+
+**Consecuencias:** habilita construir la emisión completa sin haber resuelto por dónde sale el presupuesto — el envío real al cliente queda para la sección 3B, sin deuda pendiente en el modelo. Cierra la posibilidad de aceptar o rechazar un presupuesto que nadie mandó: desde `emitido` sólo se puede enviar o vencer, porque del otro lado no lo vio nadie. Cuesta un paso más en el flujo, que es el precio de que los dos hechos sean dos.
+
+**En el conteo del escritorio los dos suman a "Sin enviar".** Son estados distintos porque son hechos distintos, pero le piden a quien mira la misma acción, y partir en dos una sola cosa por hacer sería exactitud sin utilidad.
+
+**Evidencia:** `packages/db/migrations/0004_emision.sql` y su reversión; `TRANSITIONS` e `issueQuote` en `packages/sales/src/quotes.ts`; el bloque `Emitido y enviado son dos hechos distintos` en `packages/sales/src/quotes.integration.test.ts`.
 
 ---
 

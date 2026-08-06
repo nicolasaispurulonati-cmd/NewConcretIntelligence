@@ -29,7 +29,13 @@ import {
   type Database,
 } from '@nci/db';
 import { ROLES } from '@nci/domain';
-import { addQuoteItem, countAwaitingResponse, createQuote, sendQuote } from '@nci/sales';
+import {
+  addQuoteItem,
+  countAwaitingResponse,
+  createQuote,
+  issueQuote,
+  sendQuote,
+} from '@nci/sales';
 
 import { LISTA_MAXIMA, loadWorkspace } from './workspace.js';
 
@@ -147,6 +153,9 @@ async function presupuestoEnviado(
     quantity: 1,
     unitPrice,
   });
+  // Emitir y enviar son dos actos distintos desde D-016: para que un
+  // presupuesto espere respuesta hay que pasar por los dos.
+  await issueQuote(scope, presupuesto.entity.id);
   await sendQuote(scope, presupuesto.entity.id, 'correo');
 }
 
@@ -336,5 +345,86 @@ describe('Comprometido en presupuestos abiertos', () => {
 
     assert.ok(widget.metric);
     assert.equal(widget.metric.label, 'Comprometido en presupuestos abiertos');
+  });
+});
+
+/**
+ * El cable entre armar un presupuesto y el escritorio.
+ *
+ * Las pruebas de arriba verifican que el indicador se calcule bien cuando ya
+ * hay presupuestos. Ésta verifica lo otro: que el trabajo real llegue hasta
+ * ahí. Recorre las mismas funciones que ejecutan las acciones de la pantalla
+ * —`createQuote`, `addQuoteItem`, `issueQuote`— y mide el escritorio antes y
+ * después.
+ *
+ * Es la clase de defecto que ninguna de las otras encuentra: cada extremo puede
+ * estar perfecto y el cable entre los dos, cortado.
+ */
+describe('Crear un presupuesto mueve el escritorio', () => {
+  it('el escritorio arranca vacío y explica por qué', async () => {
+    // El punto de partida del cable. El widget está desde el primer día: lo
+    // que no hay es contenido, y en lugar de un cero suelto dice qué hacer
+    // para que deje de estar vacío.
+    const scope = await nuevoVendedor('cable-vacio');
+    const widget = await widgetDePresupuestos(scope);
+
+    assert.equal(widget.lines?.length, 0, 'sin presupuestos no hay líneas');
+    assert.equal(widget.metric, undefined, 'ni importe comprometido');
+    assert.ok(widget.emptyMessage, 'y el vacío se explica');
+  });
+
+  it('después de armar uno aparecen el número y la línea', async () => {
+    const scope = await nuevoVendedor('cable');
+    const customerId = await nuevoCliente(scope, 'cable');
+
+    const presupuesto = await createQuote(scope, { customerId });
+    entidades.push(presupuesto.entity.id);
+
+    // Un borrador vacío ya cuenta como abierto: el trabajo empezado se ve.
+    let widget = await widgetDePresupuestos(scope);
+    assert.equal(widget.lines?.length, 1, 'el borrador aparece apenas se crea');
+    assert.match(widget.lines![0]!.secondary, /borrador/);
+
+    await addQuoteItem(scope, presupuesto.entity.id, {
+      description: 'Concret D · bidón 20 L',
+      quantity: 2,
+      unitPrice: 100_000,
+      discountPercent: 10,
+    });
+
+    // 2 × 100.000 = 200.000, menos 10 % = 180.000, más 21 % de IVA = 217.800.
+    widget = await widgetDePresupuestos(scope);
+    assert.ok(widget.metric, 'con un renglón cargado ya hay importe');
+    assert.match(widget.metric.value, /2\.178,00/, 'el descuento por renglón llega al indicador');
+
+    const sinEnviar = widget.metric.context.find((c) => c.label === 'Sin enviar');
+    assert.equal(sinEnviar?.value, '1');
+  });
+
+  it('emitirlo lo mantiene abierto y cambia lo que la línea dice que hay que hacer', async () => {
+    // El estado no se comunica sólo con una etiqueta: la línea tiene que decir
+    // qué falta. Emitido y sin enviar es una tarea pendiente concreta.
+    const scope = await nuevoVendedor('cable-emitido');
+    const customerId = await nuevoCliente(scope, 'cable-emitido');
+
+    const presupuesto = await createQuote(scope, { customerId });
+    entidades.push(presupuesto.entity.id);
+    await addQuoteItem(scope, presupuesto.entity.id, {
+      description: 'Concret D',
+      quantity: 1,
+      unitPrice: 100_000,
+    });
+    await issueQuote(scope, presupuesto.entity.id);
+
+    const widget = await widgetDePresupuestos(scope);
+
+    assert.equal(widget.lines?.length, 1, 'emitido sigue estando abierto');
+    assert.match(widget.lines![0]!.secondary, /falta enviarlo/);
+
+    // Y sigue contando como pendiente de mandar, no como esperando respuesta.
+    const sinEnviar = widget.metric?.context.find((c) => c.label === 'Sin enviar');
+    const esperando = widget.metric?.context.find((c) => c.label === 'Esperando respuesta');
+    assert.equal(sinEnviar?.value, '1');
+    assert.equal(esperando?.value, '0');
   });
 });

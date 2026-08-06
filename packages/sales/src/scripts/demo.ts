@@ -21,7 +21,7 @@ import {
 import { customers, getDatabase, requireDatabaseUrl, userRoles, users } from '@nci/db';
 import { ROLES } from '@nci/domain';
 
-import { addQuoteItem, createQuote, rejectQuote, sendQuote } from '../quotes.js';
+import { addQuoteItem, createQuote, issueQuote, rejectQuote, sendQuote } from '../quotes.js';
 
 const EMAIL = 'comercial@newconcret.local';
 
@@ -215,6 +215,7 @@ async function main(): Promise<void> {
         unitPrice: 3_200,
         discountPercent: 5,
       });
+      q = await issueQuote(scope, q.entity.id);
       q = await sendQuote(scope, q.entity.id, 'correo');
       console.log(`Presupuesto ${q.number}: enviado, esperando respuesta.`);
 
@@ -239,6 +240,7 @@ async function main(): Promise<void> {
         unit: 'tambor',
         unitPrice: 1_420_000,
       });
+      q = await issueQuote(scope, q.entity.id);
       q = await sendQuote(scope, q.entity.id, 'whatsapp');
       q = await rejectQuote(scope, q.entity.id, 'Se optó por un proveedor con entrega inmediata.');
       console.log(`Presupuesto ${q.number}: rechazado, con motivo registrado.`);
